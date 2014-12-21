@@ -14,16 +14,11 @@ from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
 from fixed_point import to_fixed, new_NOIB
-
-from filter_plot import tile_raster_images
-import Image
-
-# import matplotlib.pyplot as plt
-# import matplotlib.mlab as mlab
-    
+        
 class dropout_layer(object):
     
-    def __init__(self, rng, p, scale, max_col_norm, w_LR_scale = 1., b_LR_scale = 1.):
+    def __init__(self, rng, p, scale, max_col_norm, 
+        comp_precision, update_precision, initial_range, max_sat, w_LR_scale = 1., b_LR_scale = 1.):
         
         print "        p = " + str(p)
         print "        scale = " + str(scale)
@@ -39,191 +34,7 @@ class dropout_layer(object):
         self.rng = rng
         self.max_col_norm = max_col_norm
         
-    def activation(self,z):
-    
-        raise NotImplementedError("Subclass must implement abstract method")
-        
-    def fprop(self, input):
-        
-        # scaled weighted sum
-        self.z = T.dot(input, self.W * self.scale) + self.b*self.scale
-        
-        # activation
-        self.y = self.activation(self.z)
-        
-        # return the output
-        return self.y
-    
-    def dropout_fprop(self, input):
-        
-        # create the dropout mask
-        # The cast is important because
-        # int * float32 = float64 which pulls things off the gpu
-        
-        # dropout
-        srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999))
-        self.mask = T.cast(srng.binomial(n=1, p=self.p, size=T.shape(input)), theano.config.floatX) # Bernouilli dropout
-        # self.mask = T.cast(srng.normal(avg=1., std=np.sqrt((1-self.p)/self.p), size=T.shape(input)), theano.config.floatX) # Gaussian dropout
-        self.x = input * self.mask
-        self.z = T.dot(self.x, self.W) + self.b
-        
-        # drop connect
-        # srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999))
-        # self.mask = T.cast(srng.binomial(n=1, p=self.p, size=T.shape(self.W)), theano.config.floatX)
-        # self.x = input
-        # self.z = T.dot(self.x, self.W*self.mask) + self.b
-        
-        # activation
-        self.y = self.activation(self.z)
-        
-        # return the output
-        return self.y
-        
-    def bprop(self, cost):
-        
-        # product = T.dot(self.W.T, self.W)
-        # orthogonal_cost = product - T.identity_like(product)
-        # orthogonal_cost = (orthogonal_cost * orthogonal_cost)/2/100
-        
-        # total_cost = cost + T.sum(orthogonal_cost)
-        
-        # compute gradients of parameters
-        self.dEdW = T.grad(cost, self.W)
-        self.dEdb = T.grad(cost, self.b)
-        
-    def target_prop2(self, target):
-    
-        output_target = T.cast(target,dtype=theano.config.floatX) 
-        
-        # compute cost 
-        target_cost = self.y-output_target
-        target_cost = (target_cost * target_cost)/2./T.shape(self.y)[1]
-        
-        cost = T.sum(target_cost)
-        
-        # product = T.dot(self.W.T, self.W)
-        # orthogonal_cost = product - T.identity_like(product)
-        # orthogonal_cost = (orthogonal_cost * orthogonal_cost)/2./T.shape(self.y)[1]/100000000
-        
-        # cost = T.sum(target_cost + orthogonal_cost)
-        
-        # compute gradients of parameters
-        self.dEdW = T.grad(cost, self.W)
-        self.dEdb = T.grad(cost, self.b)
-        
-        # compute input target        
-        output_target = self.activation_inverse(output_target)
-        input_target = T.dot(output_target,self.W.T)
-        
-        return input_target
-        
-    def target_prop(self, delta):
-    
-        output_delta = T.cast(delta,dtype=theano.config.floatX) 
-        
-        # compute cost
-        target_cost = (output_delta * output_delta)/2./T.shape(self.y)[1]
-        
-        # cost = T.sum(target_cost)
-        
-        product = T.dot(self.W.T, self.W)
-        orthogonal_cost = product - T.identity_like(product)
-        orthogonal_cost = (orthogonal_cost * orthogonal_cost)/2.
-        
-        cost = T.sum(target_cost + orthogonal_cost)
-        
-        # compute gradients of parameters
-        self.dEdW = T.grad(cost, self.W)
-        self.dEdb = T.grad(cost, self.b)
-        
-        # compute input target        
-        output_delta = self.activation_inverse(output_delta)
-        input_delta = T.dot(output_delta,self.W.T)
-        
-        return input_delta
-        
-    def updates(self, LR, M):    
-        
-        # compute updates
-        # no (1-M) scale factor
-        # https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/training_algorithms/learning_rule.py
-        # http://www.willamette.edu/~gorr/classes/cs449/momrate.html
-        # it may be the reason why Ian does not use the Toronto advised 0.95 momentum
-        new_update_W = M * self.update_W - LR * self.w_LR_scale * self.dEdW
-        new_update_b = M * self.update_b - LR * self.b_LR_scale * self.dEdb
-        
-        # compute new parameters.
-        new_W = self.W + new_update_W
-        new_b = self.b + new_update_b
-        
-        # L2 column constraint on W
-        col_norms = T.sqrt(T.sum(T.sqr(new_W), axis=0))
-        # col_norms = T.max(new_W, axis=0)
-        desired_norms = T.clip(col_norms, 0, self.max_col_norm) # clip = saturate below min and beyond max
-        new_W = new_W * (desired_norms / (1e-7 + col_norms))
-        # for some reason, works better than 
-        # new_W = new_W * (desired_norms / col_norms)
-        # It may be a kind of regularization
-        
-        # return the updates of shared variables
-        updates = []
-        updates.append((self.W, new_W))
-        updates.append((self.b, new_b))
-        updates.append((self.update_W, new_update_W))
-        updates.append((self.update_b, new_update_b))
-        
-        return updates
-    
-    
-class Sigmoid_layer(dropout_layer):
-
-    def __init__(self, rng, n_inputs, n_units, p, scale, max_col_norm):
-
-        # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm)
-        
-        self.n_inputs = n_inputs
-        self.n_units = n_units
-        
-        print "        n_inputs = " + str(n_inputs)
-        print "        n_units = " + str(n_units)
-    
-        # initial values of parameters
-        low=-np.sqrt(6. / (n_inputs + n_units))
-        high=np.sqrt(6. / (n_inputs + n_units))
-        W_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
-        b_values = np.zeros((n_units), dtype=theano.config.floatX)
-        b_values = b_values + 1.
-            
-        # creation of shared symbolic variables
-        # shared variables are the state of the built function
-        # in practice, we put them in the GPU memory
-        self.W = theano.shared(value=W_values, name='W')
-        self.b = theano.shared(value=b_values, name='b')
-        
-        # momentum
-        self.update_W = theano.shared(value=np.zeros((n_inputs, n_units), dtype=theano.config.floatX), name='update_W')
-        self.update_b = theano.shared(value=np.zeros((n_units), dtype=theano.config.floatX), name='update_b')
-    
-    # activation function
-    def activation(self,z):
-        
-        return T.nnet.sigmoid(z)
-        # return z
-    
-    def activation_inverse(self,y):
-        
-        return T.log(y) - T.log(1-y)
-        # return y
-        
-class fixed_dropout_layer(dropout_layer):
-    
-    def __init__(self, rng, p, scale, max_col_norm, 
-        comp_precision, update_precision, initial_range, max_sat, w_LR_scale = 1., b_LR_scale = 1.):
-        
-        # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm, w_LR_scale, b_LR_scale)
-        
+        # create shared variables
         self.comp_precision = theano.shared(value=comp_precision, name='comp_precision')
         self.update_precision = theano.shared(value=update_precision, name='update_precision')
         self.max_sat = theano.shared(value=max_sat, name='max_sat')
@@ -282,20 +93,17 @@ class fixed_dropout_layer(dropout_layer):
         return  self.fixed_y
     
     def bprop(self, dEdy):
-        
+   
         self.fixed_dEdy = to_fixed(dEdy, self.comp_precision, self.dEdy_range)
         
         # activation
-        self.activation_derivative()
+        self.fixed_dEdz = to_fixed(T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0], self.comp_precision, self.dEdz_range)
          
         # compute gradients of parameters
-        # self.fixed_dEdW = to_fixed(T.dot(self.fixed_x.T,self.fixed_dEdz), self.comp_precision,self.dEdw_range)
         self.fixed_dEdW = to_fixed(T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdw_range)
-        # self.fixed_dEdb = to_fixed(T.sum(self.fixed_dEdz, axis=0), self.comp_precision,self.dEdb_range)
         self.fixed_dEdb = to_fixed(T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdb_range)
         
         # weighted sum
-        # dEdx = T.dot(self.fixed_dEdz,self.fixed_W.T)
         dEdx = T.grad(cost = None, wrt=[self.fixed_x], known_grads={self.z:self.fixed_dEdz})[0]
         
         # apply mask
@@ -374,7 +182,8 @@ class fixed_dropout_layer(dropout_layer):
         
 class MaxoutLayer(dropout_layer):
 
-    def __init__(self, rng, n_inputs, n_units, n_pieces, p, scale, max_col_norm):
+    def __init__(self, rng, n_inputs, n_units, n_pieces, p, scale, max_col_norm, 
+        comp_precision, update_precision, initial_range, max_sat):
         
         self.n_pieces=n_pieces
         self.n_inputs = n_inputs
@@ -385,7 +194,8 @@ class MaxoutLayer(dropout_layer):
         print "        n_units = " + str(n_units)
         
         # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm)
+        dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
+            comp_precision, update_precision, initial_range, max_sat)
     
         # initial values of parameters
         low=-np.sqrt(6. / (n_inputs + n_units*n_pieces))
@@ -402,29 +212,6 @@ class MaxoutLayer(dropout_layer):
         # momentum
         self.update_W = theano.shared(value=np.zeros((n_inputs, n_units*n_pieces), dtype=theano.config.floatX), name='update_W')
         self.update_b = theano.shared(value=b_values, name='update_b')
-    
-    # works only for first layer
-    def parameters_image(self, path):
-        
-        image_size = np.int(np.sqrt(self.n_inputs))
-        neuron_size = np.int(np.sqrt(self.n_units * self.n_pieces))
-        
-        image = self.W.get_value()
-        image = image.transpose()
-        image = tile_raster_images(image,(image_size,image_size), tile_shape = (neuron_size,neuron_size))
-        image = Image.fromarray(image) # plot_image = Image.fromarray(np.uint8((plot_image)*255))
-        
-        
-        image.save(path)
-        
-    def parameters_histogram(self, path):
-                
-        bins = 1000
-        histogram = np.histogram(self.W.get_value(),bins = bins)
-        
-        plt.plot(histogram[1][:bins],histogram[0])
-        plt.savefig(path)
-        # plt.show()
     
     # activation function
     def activation(self,z):
@@ -444,31 +231,11 @@ class MaxoutLayer(dropout_layer):
         # norme euclidienne
         # self.y0 = T.sqrt(T.sum(T.sqr(self.z),axis=2))
         return y
-    
-class fixed_MaxoutLayer(fixed_dropout_layer,MaxoutLayer):
-
-    def __init__(self, rng, n_inputs, n_units, n_pieces, p, scale, max_col_norm, 
-        comp_precision, update_precision, initial_range, max_sat):
         
-        # call mother class constructor
-        fixed_dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
-            comp_precision, update_precision, initial_range, max_sat)
-            
-        MaxoutLayer.__init__(self, rng, n_inputs, n_units, n_pieces, p, scale, max_col_norm)
-        
-    def activation_derivative(self):
-        
-        # dydz = T.grad(T.sum(self.y), self.fixed_z) # matrix filled with 1 and 0. In order to use grad, we must not use to_fixed, hence y0
-        # dydz = T.reshape(dydz,(T.shape(self.fixed_dEdy)[0], self.n_units, self.n_pieces))
-        # self.fixed_dEdz = T.reshape(self.fixed_dEdy,(T.shape(self.fixed_dEdy)[0], self.n_units, 1))
-        # self.fixed_dEdz = dydz * self.fixed_dEdz
-        # self.fixed_dEdz = T.reshape(self.fixed_dEdz,(T.shape(self.fixed_dEdy)[0], self.n_units*self.n_pieces))
-        
-        self.fixed_dEdz = to_fixed(T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0], self.comp_precision, self.dEdz_range)
-
 class SoftmaxLayer(dropout_layer):
     
-    def __init__(self, rng, n_inputs, n_units, p, scale, max_col_norm):
+    def __init__(self, rng, n_inputs, n_units, p, scale, max_col_norm, 
+        comp_precision, update_precision, initial_range, max_sat):
         
         self.n_inputs = n_inputs
         self.n_units = n_units
@@ -477,8 +244,9 @@ class SoftmaxLayer(dropout_layer):
         print "        n_units = " + str(n_units)
         
         # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm)
-        
+        dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
+            comp_precision, update_precision, initial_range, max_sat)
+            
         # initial values of parameters
         W_values = np.zeros((n_inputs, n_units), dtype=theano.config.floatX)
         b_values = np.zeros(n_units, dtype=theano.config.floatX)
@@ -496,28 +264,15 @@ class SoftmaxLayer(dropout_layer):
         
         return T.nnet.softmax(z)
         
-class fixed_SoftmaxLayer(fixed_dropout_layer,SoftmaxLayer):
-
-    def __init__(self, rng, n_inputs, n_units, p, scale, max_col_norm,
-        comp_precision, update_precision, initial_range, max_sat):
-    
-        # call mother class constructor
-        fixed_dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
-            comp_precision, update_precision, initial_range, max_sat)
-        
-        SoftmaxLayer.__init__(self, rng, n_inputs, n_units, p, scale, max_col_norm)
-    
-    def activation_derivative(self):
-        
-        self.fixed_dEdz = to_fixed(self.fixed_dEdy, self.comp_precision, self.dEdz_range)
-        
 class Maxout_conv_layer(dropout_layer): 
     
-    def __init__(self, rng, image_shape, zero_pad, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm, w_LR_scale, b_LR_scale, partial_sum):
+    def __init__(self, rng, image_shape, zero_pad, output_shape, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm,
+            comp_precision, update_precision, initial_range, max_sat, w_LR_scale=1, b_LR_scale=1, partial_sum = 1):
         
         # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm, w_LR_scale, b_LR_scale)
+        dropout_layer.__init__(self, rng, p, scale, max_col_norm, comp_precision, update_precision, initial_range, max_sat, w_LR_scale, b_LR_scale)
         
+        print '        output_shape = ' +str(output_shape)
         print '        image_shape = ' +str(image_shape)
         
         # add n zero on both side of the input 
@@ -536,6 +291,7 @@ class Maxout_conv_layer(dropout_layer):
         print '        partial_sum = ' +str(partial_sum)
         
         # save the parameters
+        self.output_shape = output_shape
         self.image_shape = image_shape
         self.zero_pad = zero_pad
         self.filter_shape = (filter_shape[0]*n_pieces,filter_shape[1],filter_shape[2],filter_shape[3])
@@ -560,101 +316,13 @@ class Maxout_conv_layer(dropout_layer):
         self.b = theano.shared(value=b_values)
         
         self.update_W = theano.shared(value=np.zeros(self.filter_shape, dtype=theano.config.floatX), name='update_W')
-        self.update_b = theano.shared(value=np.zeros((self.filter_shape[0],), dtype=theano.config.floatX), name='update_b')
-        
-    def fprop(self, input):
-        
-        input = input.reshape(self.image_shape)
-        
-        # convolution
-        input_shuffled = input.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        filters_shuffled = self.W.dimshuffle(1, 2, 3, 0)*self.scale # bc01 to c01b
-        conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
-        contiguous_input = gpu_contiguous(input_shuffled)
-        contiguous_filters = gpu_contiguous(filters_shuffled)
-        conv_out_shuffled = conv_op(contiguous_input, contiguous_filters)
-        conv_out = conv_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
-        
-        # downsample each feature map individually, using maxpooling
-        # pooled_out = downsample.max_pool_2d(input=conv_out,
-        #                                     ds=poolsize, ignore_border=True)
-        pool_op = MaxPool(ds=self.pool_shape, stride=self.pool_stride)
-        pooled_out_shuffled = pool_op(conv_out_shuffled)
-        pooled_out = pooled_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
-        
-        # bias
-        pooled_out = pooled_out + self.b.dimshuffle('x', 0, 'x', 'x')*self.scale
-        
-        # activation
-        pooled_out = self.activation(pooled_out)
-        pooled_out = pooled_out.flatten(2)
-        
-        return pooled_out
-        
-    def dropout_fprop(self, input):
-        
-        # create the dropout mask
-        # The cast is important because
-        # int * float32 = float64 which pulls things off the gpu
-        
-        srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999))
-        mask = T.cast(srng.binomial(n=1, p=self.p, size=T.shape(input)), theano.config.floatX)
-        input = input * mask
-        
-        input = input.reshape(self.image_shape)
-        
-        # dropconnect
-        # srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999))
-        # mask = T.cast(srng.binomial(n=1, p=self.p, size=T.shape(self.W)), theano.config.floatX)
-        
-        # input = input.reshape(self.image_shape)
-        # masked_W = self.W * mask
-        
-        # convolution
-        input_shuffled = input.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        filters_shuffled = self.W.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
-        contiguous_input = gpu_contiguous(input_shuffled)
-        contiguous_filters = gpu_contiguous(filters_shuffled)
-        conv_out_shuffled = conv_op(contiguous_input, contiguous_filters)
-        conv_out = conv_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
-        
-        # downsample each feature map individually, using maxpooling
-        # pooled_out = downsample.max_pool_2d(input=conv_out,
-        #                                     ds=poolsize, ignore_border=True)
-        pool_op = MaxPool(ds=self.pool_shape, stride=self.pool_stride)
-        pooled_out_shuffled = pool_op(conv_out_shuffled)
-        pooled_out = pooled_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
-        
-        # bias
-        pooled_out = pooled_out + self.b.dimshuffle('x', 0, 'x', 'x')
-        
-        # activation
-        pooled_out = self.activation(pooled_out)
-        pooled_out = pooled_out.flatten(2)
-        
-        return pooled_out
-        
-     # activation function
+        self.update_b = theano.shared(value=np.zeros((self.filter_shape[0],), dtype=theano.config.floatX), name='update_b')    
+
+    # activation function
     def activation(self,conv_out):
         
         conv_out = T.reshape(conv_out,(T.shape(conv_out)[0], T.shape(conv_out)[1]/self.n_pieces, self.n_pieces,T.shape(conv_out)[2],T.shape(conv_out)[3] ))
         return T.max( conv_out,axis=2)
-        
-class fixed_Maxout_conv_layer(fixed_dropout_layer, Maxout_conv_layer): 
-    
-    def __init__(self, rng, image_shape, zero_pad, output_shape, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm,
-            comp_precision, update_precision, initial_range, max_sat, w_LR_scale=1, b_LR_scale=1, partial_sum = 1):
-        
-        # call mother class constructor
-        fixed_dropout_layer.__init__(self, rng, p, scale, max_col_norm, comp_precision, update_precision, initial_range, max_sat, w_LR_scale, b_LR_scale)
-        Maxout_conv_layer.__init__(self, rng, image_shape, zero_pad, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm, w_LR_scale, b_LR_scale, partial_sum)
-        
-        print '        output_shape = ' +str(output_shape)
-        
-        # save the parameters
-        self.output_shape = output_shape
-        
         
     def fprop(self, input):
         
@@ -739,45 +407,16 @@ class fixed_Maxout_conv_layer(fixed_dropout_layer, Maxout_conv_layer):
         
         self.fixed_dEdy = to_fixed(dEdy.reshape(self.output_shape), self.comp_precision, self.dEdy_range)
         
-        # self.dEdz =T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0]
-        # self.fixed_dEdz = to_fixed(self.dEdz, self.comp_precision, self.dEdz_range)
-        
-        # bprop maxout
-        # dydz1 = T.grad(T.sum(self.y), self.z1) # matrix filled with 1 and 0
-        # dEdz1 = to_fixed(dydz1 * self.dEdy.repeat(self.n_pieces,axis = 1), self.comp_precision, self.dEdz_range)
         fixed_dEdu = to_fixed(T.grad(cost = None, wrt=[self.fixed_u], known_grads={self.y:self.fixed_dEdy})[0],  self.comp_precision,self.dEdz_range)
         
-        # dEdb
-        # self.dEdb = T.zeros_like(self.b)
-        # self.dEdb =  to_fixed(T.sum(dEdz1, axis=(0,2,3)), self.comp_precision,self.dEdb_range) # same bias for the whole feature map
         self.fixed_dEdb = to_fixed(T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.u:fixed_dEdu})[0],  self.comp_precision,self.dEdb_range)
         
-        # bprop max pooling
-        # dz0dz = T.grad(T.sum(self.z0), self.z) # matrix filled with 1 and 0
-        # self.dEdz = to_fixed(dz0dz *dEdz1.repeat(self.pool_stride,axis = 2).repeat(self.pool_stride, axis = 3), self.comp_precision, self.dEdz_range)
         self.fixed_dEdz = to_fixed(T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.u:fixed_dEdu})[0], self.comp_precision, self.dEdz_range)
-
-        # dEdw
-        # input_shuffled = self.x.dimshuffle(0, 2, 3, 1) # bc01 to b01c
-        # filters_shuffled = self.dEdz.dimshuffle(0, 2, 3, 1) # bc01 to b01c
-        # conv_op = FilterActs(stride=self.filter_stride, partial_sum=1,pad = self.zero_pad)
-        # contiguous_input = gpu_contiguous(input_shuffled)
-        # contiguous_filters = gpu_contiguous(filters_shuffled)
-        # conv_out_shuffled = conv_op(contiguous_input, contiguous_filters)
-        # self.dEdW = to_fixed(conv_out_shuffled.dimshuffle(0, 3, 1, 2),  self.comp_precision,self.dEdw_range)# b01c to bc01
+        
         self.fixed_dEdW = to_fixed(T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0],  self.comp_precision,self.dEdw_range)
         
-        # bprop convolution (dEdx)
-        # input_shuffled = self.dEdz.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        # filters_shuffled = self.w_comp.dimshuffle(0, 2, 3, 1) # bc01 to b01c
-        # conv_op = FilterActs(stride=self.filter_stride, partial_sum=1,pad = self.filter_shape[2] - self.zero_pad -1)
-        # contiguous_input = gpu_contiguous(input_shuffled)
-        # contiguous_filters = gpu_contiguous(filters_shuffled)
-        # conv_out_shuffled = conv_op(contiguous_input, contiguous_filters)
-        # dEdx = conv_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
         dEdx = T.grad(cost = None, wrt=[self.fixed_x], known_grads={self.z:self.fixed_dEdz})[0]
         
-        # apply mask
         dEdx = T.reshape(self.mask,T.shape(dEdx)) * dEdx
         
         return dEdx     

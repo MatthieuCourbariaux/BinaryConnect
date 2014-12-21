@@ -176,17 +176,19 @@ class Trainer(object):
                 self.train_batch(j, self.LR, self.M)
         
         # load the last inclompete gpu batch of batches
-        self.load_shared_dataset(set,
-                start=n_gpu_batches*self.gpu_batches,
-                size=n_remaining_batches)
+        if n_remaining_batches > 0:
         
-        shuffled_range_j = range(n_remaining_batches)
-        if self.shuffle_batches==True:
-                self.rng.shuffle(shuffled_range_j)
-        
-        for j in shuffled_range_j: 
+            self.load_shared_dataset(set,
+                    start=n_gpu_batches*self.gpu_batches,
+                    size=n_remaining_batches)
+            
+            shuffled_range_j = range(n_remaining_batches)
+            if self.shuffle_batches==True:
+                    self.rng.shuffle(shuffled_range_j)
+            
+            for j in shuffled_range_j: 
 
-            self.train_batch(j, self.LR, self.M)
+                self.train_batch(j, self.LR, self.M)
     
     def test_epoch(self, set):
         
@@ -219,13 +221,15 @@ class Trainer(object):
                 error_rate += self.test_batch(j)
         
         # load the last inclompete gpu batch of batches
-        self.load_shared_dataset(set,
-                start=n_gpu_batches*self.gpu_batches,
-                size=n_remaining_batches)
+        if n_remaining_batches > 0:
         
-        for j in range(n_remaining_batches): 
+            self.load_shared_dataset(set,
+                    start=n_gpu_batches*self.gpu_batches,
+                    size=n_remaining_batches)
+            
+            for j in range(n_remaining_batches): 
 
-            error_rate += self.test_batch(j)
+                error_rate += self.test_batch(j)
         
         error_rate /= (n_batches*self.batch_size)
         error_rate *= 100.
@@ -320,7 +324,6 @@ class fixed_Trainer(Trainer):
         
         if self.dynamic_range == True : 
             self.init_range()
-            # print "no dynamic range init"
     
     def init_range(self):
         
@@ -340,6 +343,8 @@ class fixed_Trainer(Trainer):
         for k in range(20):
             self.update_range()
         
+        # self.model.print_range()
+        
         # set back the precision and the random parameters
         self.model.set_comp_precision(comp_precision)
         self.model.set_update_precision(update_precision)
@@ -352,7 +357,6 @@ class fixed_Trainer(Trainer):
         if self.dynamic_range == True : 
             for k in range(5):
                 self.update_range()
-            # print "no dynamic range update"
     
     def monitor(self):
     

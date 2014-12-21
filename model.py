@@ -12,21 +12,10 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from layer import Maxout_conv_layer, SoftmaxLayer, fixed_SoftmaxLayer, MaxoutLayer, fixed_MaxoutLayer, Sigmoid_layer, fixed_Maxout_conv_layer
+from layer import Maxout_conv_layer, SoftmaxLayer, MaxoutLayer
 
-from filter_plot import tile_raster_images
-import Image
-
-# def one_hot(t, r=None):
-
-    # if r is None:
-        # r = T.max(t) + 1
-        
-    # ranges = T.shape_padleft(T.arange(r), t.ndim)
-    # rvalue = T.eq(ranges, T.shape_padright(t, 1))
-    # rvalue = T.reshape(rvalue,(T.shape(t)[0],T.cast(r,dtype='int64')))
-    
-    # return rvalue
+# from filter_plot import tile_raster_images
+# import Image
 
 class deep_dropout_network(object):
     
@@ -72,13 +61,6 @@ class deep_dropout_network(object):
         for k in range(0,self.n_hidden_layers+1):
             self.layer[k].bprop(NLL)
             
-    def target_prop(self, t):
-        
-        target = t
-        
-        for k in range(self.n_hidden_layers,-1,-1):
-            target = self.layer[k].target_prop(target)
-        
     # train function
     def bprop_updates(self, x, t, LR, M):
     
@@ -88,15 +70,6 @@ class deep_dropout_network(object):
         
         return updates 
         
-    # train function
-    def target_prop_updates(self, x, t, LR, M):
-    
-        y = self.dropout_fprop(x)
-        self.target_prop(t-y)
-        # self.target_prop(t)
-        updates = self.updates(LR,M)
-        
-        return updates
     
     # you give it the input and the target and it gives you the updates
     def updates(self, LR, M):
@@ -157,169 +130,7 @@ class deep_dropout_network(object):
             self.layer[k].b.set_value(cPickle.load(save_file))
 
         # close the file
-        save_file.close()
- 
-class Sigmoid_MLP(deep_dropout_network):
-    
-    def __init__(self, rng,  n_hidden_layers, 
-        n_input, p_input, scale_input, max_col_norm_input,
-        n_hidden, p_hidden, scale_hidden, max_col_norm_hidden,
-        n_output, p_output, scale_output, max_col_norm_output):
-        
-        deep_dropout_network.__init__(self, n_hidden_layers)
-        
-        # save the parameters
-        self.rng = rng
-
-        self.n_input = n_input
-        self.p_input = p_input
-        self.scale_input = scale_input   
-        self.max_col_norm_input = max_col_norm_input         
-        
-        self.n_output = n_output
-        self.p_output = p_output
-        self.scale_output = scale_output
-        self.max_col_norm_output = max_col_norm_output 
-
-        self.n_hidden = n_hidden
-        self.p_hidden = p_hidden
-        self.scale_hidden = scale_hidden
-        self.max_col_norm_hidden = max_col_norm_hidden 
-        
-        
-        self.layer.append(Sigmoid_layer(rng = self.rng, n_inputs = self.n_input, n_units = self.n_hidden,
-            p = self.p_input, scale = self.scale_input, max_col_norm = self.max_col_norm_input))
-
-        for k in range(1,self.n_hidden_layers):
-            self.layer.append(Sigmoid_layer(rng = self.rng, n_inputs = self.n_hidden, n_units = self.n_hidden,
-            p = self.p_hidden, scale = self.scale_hidden, max_col_norm = self.max_col_norm_hidden))
-        
-        self.layer.append(Sigmoid_layer(rng = self.rng, n_inputs= self.n_hidden, n_units= self.n_output,
-            p = self.p_output, scale = self.scale_output, max_col_norm = self.max_col_norm_output)) 
- 
-class My_CNN(deep_dropout_network):
-    
-    def __init__(self, rng, batch_size):
-        
-        deep_dropout_network.__init__(self, 3)
-        
-        self.rng = rng
-        self.batch_size = batch_size
-        
-        print "    Convolution layer 1:"
-        
-        
-        self.layer.append(Maxout_conv_layer(
-            rng,
-            image_shape=(batch_size, 1, 28, 28),
-            zero_pad = 0, 
-            filter_shape=(32, 1, 5, 5),
-            filter_stride = 1,
-            n_pieces = 4,
-            pool_shape=(2, 2),
-            pool_stride = 2,
-            p = 0.8, 
-            scale = 1., 
-            max_col_norm = 1.9365
-        ))
-        
-        print "    Convolution layer 2:"
-        
-        self.layer.append(Maxout_conv_layer(
-            rng,
-            image_shape=(batch_size, 32, 12, 12),
-            zero_pad = 0, # add n zero on both side of the input
-            filter_shape=(96, 32, 5, 5),
-            filter_stride = 1,
-            n_pieces = 4,
-            pool_shape=(2, 2),
-            pool_stride = 2,
-            p = 0.5, 
-            scale = 0.5, 
-            max_col_norm = 1.9365
-        ))
-        
-        print "    Convolution layer 3:"
-        
-        self.layer.append(Maxout_conv_layer(
-            rng,
-            image_shape=(batch_size, 96, 4, 4),
-            zero_pad = 0, # add n zero on both side of the input
-            filter_shape=(384, 96, 4, 4),
-            filter_stride = 1,
-            n_pieces = 4,
-            pool_shape=(1, 1),
-            pool_stride = 1,
-            p = 0.5, 
-            scale = 0.5, 
-            max_col_norm = 1.9365
-        ))
-        
-        print "    Fully connected layer:"
-        
-        self.layer.append(MaxoutLayer(rng = rng, n_inputs= 384, n_units = 10, n_pieces = 4, p = 0.5, scale = 0.5, max_col_norm =1.9365))
-        
-class Ian_CNN(deep_dropout_network):
-    
-    def __init__(self, rng, batch_size):
-        
-        deep_dropout_network.__init__(self, 3)
-        
-        self.rng = rng
-        self.batch_size = batch_size
-        
-        print "    Convolution layer 1:"
-        
-        self.layer.append(Maxout_conv_layer(
-            rng,
-            image_shape=(batch_size, 1, 28, 28),
-            zero_pad = 0, 
-            filter_shape=(48, 1, 8, 8),
-            filter_stride = 1,
-            n_pieces = 2,
-            pool_shape=(4, 4),
-            pool_stride = 2,
-            p = 0.8, 
-            scale = 1., 
-            max_col_norm = 0.9
-        ))
-        
-        print "    Convolution layer 2:"
-        
-        self.layer.append(Maxout_conv_layer(
-            rng,
-            image_shape=(batch_size, 48, 10, 10),
-            zero_pad = 3, # add n zero on both side of the input
-            filter_shape=(48, 48, 8, 8),
-            filter_stride = 1,
-            n_pieces = 2,
-            pool_shape=(4, 4),
-            pool_stride = 2,
-            p = 0.5, 
-            scale = 0.5, 
-            max_col_norm = 1.9365
-        ))
-        
-        print "    Convolution layer 3:"
-        
-        self.layer.append(Maxout_conv_layer(
-            rng,
-            image_shape=(batch_size, 48, 4, 4),
-            zero_pad = 3, # add n zero on both side of the input
-            filter_shape=(24, 48, 5, 5),
-            filter_stride = 1,
-            n_pieces = 4,
-            pool_shape=(2, 2),
-            pool_stride = 2,
-            p = 0.5, 
-            scale = 0.5, 
-            max_col_norm = 1.9365
-        ))
-        
-        print "    Softmax layer:"
-        
-        self.layer.append(SoftmaxLayer(rng = rng, n_inputs= 24 * 3 * 3, n_units = 10, p = 0.5, scale = 0.5, max_col_norm =1.9365))        
-        
+        save_file.close()        
         
 class maxout_MLP(deep_dropout_network):
     
@@ -407,27 +218,14 @@ class fixed_deep_dropout_network(deep_dropout_network):
     # when you use fixed point, you cannot use T.grad directly -> bprop modifications.
     def bprop(self, y, t):
         
-        # there is a simplification between softmax derivative and nll derivative
-        
-        # print "y "+str(y.type)
-        # print "t "+str(t.type)
-        # print "one_hot(t) "+str(one_hot(t).type)
-        
+        # there is a simplification between softmax derivative and nll derivative        
         dEdy = (y-t)/T.cast(T.shape(y)[1],dtype=theano.config.floatX) # /2. # actually, it is dEdz and not dEdy
-        # MSE = T.sum((y-t)*(y-t))/2./T.shape(y)[1]
-        # NLL = T.sum(-T.log(y)*t)/T.shape(y)[1]
-        # dEdy = T.grad(NLL,y)
-        
-        # dEdy = T.addbroadcast(dEdy,1)
-        
-        # print "dEdy "+str(dEdy)
-        # print "dEdy "+str(dEdy.type)
         
         # bprop
         for k in range(self.n_hidden_layers,-1,-1):
             dEdy = self.layer[k].bprop(dEdy)
     
-    # function that updates the range of all fixed point vectors
+    # function that updates the ranges of all fixed point vectors
     def range_updates(self,x,t):
             
         y = self.dropout_fprop(x)
@@ -472,7 +270,7 @@ class fixed_deep_dropout_network(deep_dropout_network):
         
         return self.layer[0].max_ratio.get_value()
 
-class fixed_Ian_CNN(fixed_deep_dropout_network):
+class MNIST_model(fixed_deep_dropout_network):
     
     def __init__(self, rng, batch_size, comp_precision, update_precision, initial_range, max_sat):
         
@@ -483,7 +281,7 @@ class fixed_Ian_CNN(fixed_deep_dropout_network):
         
         print "    Convolution layer 1:"
         
-        self.layer.append(fixed_Maxout_conv_layer(
+        self.layer.append(Maxout_conv_layer(
             rng,
             image_shape=(batch_size, 1, 28, 28),
             zero_pad = 0, 
@@ -505,7 +303,7 @@ class fixed_Ian_CNN(fixed_deep_dropout_network):
         
         print "    Convolution layer 2:"
         
-        self.layer.append(fixed_Maxout_conv_layer(
+        self.layer.append(Maxout_conv_layer(
             rng,
             image_shape=(batch_size, 48, 10, 10),
             zero_pad = 3, # add n zero on both side of the input
@@ -527,7 +325,7 @@ class fixed_Ian_CNN(fixed_deep_dropout_network):
         
         print "    Convolution layer 3:"
         
-        self.layer.append(fixed_Maxout_conv_layer(
+        self.layer.append(Maxout_conv_layer(
             rng,
             image_shape=(batch_size, 48, 4, 4),
             zero_pad = 3, # add n zero on both side of the input
@@ -548,7 +346,7 @@ class fixed_Ian_CNN(fixed_deep_dropout_network):
         
         print "    Softmax layer:"
         
-        self.layer.append(fixed_SoftmaxLayer(
+        self.layer.append(SoftmaxLayer(
             rng = rng, 
             n_inputs= 24*3*3, 
             n_units = 10, 
@@ -589,8 +387,8 @@ class fixed_Ian_CNN_CIFAR10(fixed_deep_dropout_network):
             update_precision = update_precision, 
             initial_range = initial_range, 
             max_sat = max_sat,
-            # w_LR_scale = 0.2,
-            # b_LR_scale = 0.2,
+            w_LR_scale = 0.2,
+            b_LR_scale = 0.2,
             # partial_sum = 32 # total number = 33*33
         ))
         
@@ -609,13 +407,13 @@ class fixed_Ian_CNN_CIFAR10(fixed_deep_dropout_network):
             pool_stride =2,
             p = 0.5, 
             scale = 0.5, 
-            max_col_norm = 0.9,
+            max_col_norm = 1.9365,
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
             max_sat = max_sat,
-            # w_LR_scale = 0.2,
-            # b_LR_scale = 0.2,
+            w_LR_scale = 0.2,
+            b_LR_scale = 0.2,
             # partial_sum = 16 # total number = 15*15
         ))   
                
@@ -634,13 +432,13 @@ class fixed_Ian_CNN_CIFAR10(fixed_deep_dropout_network):
             pool_stride =2,
             p = 0.5, 
             scale = 0.5, 
-            max_col_norm = 0.9,
+            max_col_norm = 1.9365,
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
             max_sat = max_sat,
-            # w_LR_scale = 0.2,
-            # b_LR_scale = 0.2,
+            w_LR_scale = 0.2,
+            b_LR_scale = 0.2,
             # partial_sum = 8 # total number = 9*9
         )) 
         
@@ -653,7 +451,7 @@ class fixed_Ian_CNN_CIFAR10(fixed_deep_dropout_network):
             n_pieces = 5,
             p = 0.5, 
             scale = 0.5, 
-            max_col_norm = 0.9,
+            max_col_norm = 1.9365,
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
@@ -668,7 +466,7 @@ class fixed_Ian_CNN_CIFAR10(fixed_deep_dropout_network):
             n_units = 10, 
             p = 0.5, 
             scale = 0.5, 
-            max_col_norm = 0.9,
+            max_col_norm = 1.9365,
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
@@ -708,21 +506,21 @@ class fixed_maxout_MLP(maxout_MLP, fixed_deep_dropout_network):
         # Create MLP layers    
         if self.n_hidden_layers == 0 :
         
-            self.layer.append(fixed_SoftmaxLayer(rng = self.rng, n_inputs=self.n_input, n_units=self.n_output, 
+            self.layer.append(SoftmaxLayer(rng = self.rng, n_inputs=self.n_input, n_units=self.n_output, 
                 p = self.p_input, scale = self.scale_input, max_col_norm = self.max_col_norm,
                 comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))
 
         else :
         
-            self.layer.append(fixed_MaxoutLayer(rng = self.rng, n_inputs = self.n_input, n_units = self.n_hidden, n_pieces = self.n_pieces, 
+            self.layer.append(MaxoutLayer(rng = self.rng, n_inputs = self.n_input, n_units = self.n_hidden, n_pieces = self.n_pieces, 
                 p = self.p_input, scale = self.scale_input, max_col_norm = self.max_col_norm,
                 comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))
 
             for k in range(1,self.n_hidden_layers):
-                self.layer.append(fixed_MaxoutLayer(rng = self.rng, n_inputs = self.n_hidden, n_units = self.n_hidden, n_pieces = self.n_pieces, 
+                self.layer.append(MaxoutLayer(rng = self.rng, n_inputs = self.n_hidden, n_units = self.n_hidden, n_pieces = self.n_pieces, 
                 p = self.p_hidden, scale = self.scale_hidden, max_col_norm = self.max_col_norm,
                 comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))
 
-            self.layer.append(fixed_SoftmaxLayer(rng = self.rng, n_inputs= self.n_hidden, n_units= self.n_output, 
+            self.layer.append(SoftmaxLayer(rng = self.rng, n_inputs= self.n_hidden, n_units= self.n_output, 
                 p = self.p_hidden, scale = self.scale_hidden, max_col_norm = self.max_col_norm,
                 comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))        
