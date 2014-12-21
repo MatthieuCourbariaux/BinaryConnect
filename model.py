@@ -345,7 +345,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
         
         print "    Convolution layer 1:"
         
-        self.layer.append(fixed_Maxout_conv_layer(
+        self.layer.append(Maxout_conv_layer(
             rng,
             image_shape=(batch_size, 3, 32, 32),
             zero_pad = 2, 
@@ -370,7 +370,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
         
         print "    Convolution layer 2:"
         
-        self.layer.append(fixed_Maxout_conv_layer(
+        self.layer.append(Maxout_conv_layer(
             rng,
             image_shape=(batch_size, 64, 16, 16),
             zero_pad = 2, # add n zero on both side of the input
@@ -395,7 +395,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
         
         print "    Convolution layer 3:"
         
-        self.layer.append(fixed_Maxout_conv_layer(
+        self.layer.append(Maxout_conv_layer(
             rng,
             image_shape=(batch_size, 128, 8, 8),
             zero_pad = 2, # add n zero on both side of the input
@@ -419,7 +419,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
         
         print "    Maxout layer:"
         
-        self.layer.append(fixed_MaxoutLayer(
+        self.layer.append(MaxoutLayer(
             rng = rng, 
             n_inputs= 128*4*4, 
             n_units = 400,
@@ -435,7 +435,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
         
         print "    Softmax layer:"
         
-        self.layer.append(fixed_SoftmaxLayer(
+        self.layer.append(SoftmaxLayer(
             rng = rng, 
             n_inputs= 400, 
             n_units = 10, 
