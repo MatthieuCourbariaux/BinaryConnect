@@ -23,19 +23,22 @@ class Trainer(object):
             LR_start, LR_sat, LR_fin, M_start, M_sat, M_fin, 
             batch_size, gpu_batches,
             n_epoch,
+            dynamic_range,
             shuffle_batches, shuffle_examples):
         
-        print '    Learning rate = %f' %(LR_start)
-        print '    Learning rate saturation = %i' %(LR_sat)
-        print '    Final learning rate = %f' %(LR_fin)
-        print '    Momentum = %f' %(M_start)
-        print '    Momentum saturation = %i' %(M_sat)
-        print '    Final momentum = %f' %(M_fin)
-        print '    Batch size = %i' %(batch_size)
-        print '    gpu_batches = %i' %(gpu_batches)
-        print '    Number of epochs = %i' %(n_epoch)
-        print '    shuffle_batches = %i' %(shuffle_batches)
-        print '    shuffle_examples = %i' %(shuffle_examples)
+        print '    Training algorithm:'
+        print '        Learning rate = %f' %(LR_start)
+        print '        Learning rate saturation = %i' %(LR_sat)
+        print '        Final learning rate = %f' %(LR_fin)
+        print '        Momentum = %f' %(M_start)
+        print '        Momentum saturation = %i' %(M_sat)
+        print '        Final momentum = %f' %(M_fin)
+        print '        Batch size = %i' %(batch_size)
+        print '        gpu_batches = %i' %(gpu_batches)
+        print '        Number of epochs = %i' %(n_epoch)
+        print '        shuffle_batches = %i' %(shuffle_batches)
+        print '        shuffle_examples = %i' %(shuffle_examples)
+        print '        Dynamic range = %i' %(dynamic_range)
 
         # save the dataset
         self.rng = rng
@@ -60,6 +63,7 @@ class Trainer(object):
         self.batch_size = batch_size
         self.gpu_batches = gpu_batches
         self.n_epoch = n_epoch
+        self.dynamic_range = dynamic_range
         
         # put a part of the dataset on gpu
         self.shared_x = theano.shared(
@@ -79,6 +83,31 @@ class Trainer(object):
         for i in range(set.X.shape[0]):
             set.X[i] = X[shuffled_index[i]]
             set.y[i] = y[shuffled_index[i]]
+    
+    def init_range(self):
+        
+        # save the precisions and the random parameters of the model
+        comp_precision = self.model.get_comp_precision()
+        update_precision = self.model.get_update_precision()
+        self.model.save_params()
+        
+        # set a good precision 
+        self.model.set_comp_precision(31)
+        self.model.set_update_precision(31)
+        
+        # train the model 1 epoch on the valid set
+        self.train_epoch(self.train_set)
+        
+        # calculate the range
+        for k in range(20):
+            self.update_range()
+        
+        # self.model.print_range()
+        
+        # set back the precision and the random parameters
+        self.model.set_comp_precision(comp_precision)
+        self.model.set_update_precision(update_precision)
+        self.model.load_params()
     
     def init(self):
         
@@ -100,6 +129,9 @@ class Trainer(object):
         
         self.best_validation_ER = self.validation_ER
         self.best_test_ER = self.test_ER
+        
+        if self.dynamic_range == True : 
+            self.init_range()
  
     def update(self):
         
@@ -121,6 +153,10 @@ class Trainer(object):
         # update LR and M as well during the first phase
         self.update_LR()
         self.update_M()
+        
+        if self.dynamic_range == True : 
+            for k in range(5):
+                self.update_range()
         
         # save the best parameters
         if self.validation_ER < self.best_validation_ER:
@@ -260,6 +296,9 @@ class Trainer(object):
         print '        epoch associated to best validation error %i' %(self.best_epoch)
         print '        best validation error rate %f%%' %(self.best_validation_ER)
         print '        test error rate associated to best validation error %f%%' %(self.best_test_ER)
+        
+        if self.dynamic_range == True : 
+            self.model.print_range()
     
     def train(self):        
         
@@ -292,90 +331,7 @@ class Trainer(object):
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "test_batch")
-
-class fixed_Trainer(Trainer):
-    
-    def __init__(self,
-            rng, save_path, load_path,
-            train_set, valid_set, test_set,
-            model,
-            LR_start, LR_sat, LR_fin, M_start, M_sat, M_fin, 
-            batch_size, gpu_batches, 
-            n_epoch,
-            dynamic_range,
-            shuffle_batches, shuffle_examples):
-        
-        Trainer.__init__(self,
-                    rng, save_path, load_path,
-                    train_set, valid_set, test_set,
-                    model,
-                    LR_start, LR_sat, LR_fin, M_start, M_sat, M_fin, 
-                    batch_size,  gpu_batches, 
-                    n_epoch,
-                    shuffle_batches, shuffle_examples)
-        
-        print '    Dynamic range = %i' %(dynamic_range)
-
-        self.dynamic_range = dynamic_range
-    
-    def init(self):
-
-        Trainer.init(self)
-        
-        if self.dynamic_range == True : 
-            self.init_range()
-    
-    def init_range(self):
-        
-        # save the precisions and the random parameters of the model
-        comp_precision = self.model.get_comp_precision()
-        update_precision = self.model.get_update_precision()
-        self.model.save_params()
-        
-        # set a good precision 
-        self.model.set_comp_precision(31)
-        self.model.set_update_precision(31)
-        
-        # train the model 1 epoch on the valid set
-        self.train_epoch(self.train_set)
-        
-        # calculate the range
-        for k in range(20):
-            self.update_range()
-        
-        # self.model.print_range()
-        
-        # set back the precision and the random parameters
-        self.model.set_comp_precision(comp_precision)
-        self.model.set_update_precision(update_precision)
-        self.model.load_params()
-    
-    def update(self):
-        
-        Trainer.update(self)
-        
-        if self.dynamic_range == True : 
-            for k in range(5):
-                self.update_range()
-    
-    def monitor(self):
-    
-        Trainer.monitor(self)
-        
-        if self.dynamic_range == True : 
-            self.model.print_range()
-    
-    def build(self):
-        
-        Trainer.build(self)
-        
-        # input and output variables
-        x = T.matrix('x')
-        y = T.matrix('y')
-
-        # before the build, you work with symbolic variables
-        # after the build, you work with numeric variables
-        
+                
         if self.dynamic_range == True :
         
             self.update_range = theano.function(inputs=[],updates=self.model.range_updates(x,y),givens={ 

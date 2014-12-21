@@ -13,8 +13,8 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from trainer import Trainer, fixed_Trainer
-from model import maxout_MLP, fixed_maxout_MLP, MNIST_model, fixed_Ian_CNN_CIFAR10
+from trainer import Trainer
+from model import PI_MNIST_model, MNIST_model, CIFAR10_SVHN_model
 
 from pylearn2.datasets.mnist import MNIST   
 from pylearn2.datasets.zca_dataset import ZCA_Dataset    
@@ -93,46 +93,22 @@ if __name__ == "__main__":
 
     # PI MNIST
     
-    # rng = np.random.RandomState(1234)
-    # LR_start = 0.2
-    # batch_size = 100
-    # gpu_batches = 500
-    
-    # model = fixed_maxout_MLP(rng = rng,
-        # n_input = 784, n_output = 10, n_hidden = 240, n_pieces = 5, n_hidden_layers = 2, 
-        # p_input = 0.8, scale_input = 1., p_hidden = 0.5, scale_hidden = 0.5, 
-        # max_col_norm = 1.9365, 
-        # comp_precision = int(sys.argv[1]), update_precision = int(sys.argv[2]), initial_range = int(sys.argv[3]), max_sat = float(sys.argv[4]))
-    
-    # core_path = sys.argv[1]+"_"+sys.argv[2]+"_"+sys.argv[3]+"_"+sys.argv[4]+"_"+sys.argv[5]
-    # load_path = None # "best_params_" + core_path+".pkl"
-    # save_path = None # "best_params_" + core_path+".pkl"
-    
-    # trainer = fixed_Trainer(rng = rng, load_path = load_path, save_path = save_path,
-        # train_set = train_set, valid_set = valid_set, test_set = test_set,
-        # model = model,
-        # LR_start = LR_start, LR_sat = 250, LR_fin = LR_start*0.1, M_start = 0.5, M_sat = 250, M_fin = 0.7, 
-        # batch_size = batch_size, gpu_batches = gpu_batches,
-        # n_epoch = 1000,
-        # shuffle_batches = False, shuffle_examples = True,
-        # dynamic_range = int(sys.argv[5]))
-    
-    # MNIST
-    
     rng = np.random.RandomState(1234)
-    LR_start = 0.1
-    batch_size = 128
+    LR_start = 0.2
+    batch_size = 100
     gpu_batches = 500
     
-    model = MNIST_model(rng = rng, batch_size = batch_size,
-        comp_precision = int(sys.argv[1]), update_precision = int(sys.argv[2]), 
-        initial_range = int(sys.argv[3]), max_sat = float(sys.argv[4]))
+    model = PI_MNIST_model(rng = rng, batch_size = batch_size,
+        n_input = 784, n_output = 10, n_hidden = 240, n_pieces = 5, n_hidden_layers = 2, 
+        p_input = 0.8, scale_input = 1., p_hidden = 0.5, scale_hidden = 0.5, 
+        max_col_norm = 1.9365, 
+        comp_precision = int(sys.argv[1]), update_precision = int(sys.argv[2]), initial_range = int(sys.argv[3]), max_sat = float(sys.argv[4]))
     
     core_path = sys.argv[1]+"_"+sys.argv[2]+"_"+sys.argv[3]+"_"+sys.argv[4]+"_"+sys.argv[5]
     load_path = None # "best_params_" + core_path+".pkl"
     save_path = None # "best_params_" + core_path+".pkl"
     
-    trainer = fixed_Trainer(rng = rng, load_path = load_path, save_path = save_path,
+    trainer = Trainer(rng = rng, load_path = load_path, save_path = save_path,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
         model = model,
         LR_start = LR_start, LR_sat = 250, LR_fin = LR_start*0.1, M_start = 0.5, M_sat = 250, M_fin = 0.7, 
@@ -141,6 +117,30 @@ if __name__ == "__main__":
         shuffle_batches = False, shuffle_examples = True,
         dynamic_range = int(sys.argv[5]))
     
+    # MNIST
+    
+    # rng = np.random.RandomState(1234)
+    # LR_start = 0.1
+    # batch_size = 128
+    # gpu_batches = 500
+    
+    # model = MNIST_model(rng = rng, batch_size = batch_size,
+        # comp_precision = int(sys.argv[1]), update_precision = int(sys.argv[2]), 
+        # initial_range = int(sys.argv[3]), max_sat = float(sys.argv[4]))
+    
+    # core_path = sys.argv[1]+"_"+sys.argv[2]+"_"+sys.argv[3]+"_"+sys.argv[4]+"_"+sys.argv[5]
+    # load_path = None # "best_params_" + core_path+".pkl"
+    # save_path = None # "best_params_" + core_path+".pkl"
+    
+    # trainer = Trainer(rng = rng, load_path = load_path, save_path = save_path,
+        # train_set = train_set, valid_set = valid_set, test_set = test_set,
+        # model = model,
+        # LR_start = LR_start, LR_sat = 250, LR_fin = LR_start*0.1, M_start = 0.5, M_sat = 250, M_fin = 0.7, 
+        # batch_size = batch_size, gpu_batches = gpu_batches,
+        # n_epoch = 1000,
+        # shuffle_batches = False, shuffle_examples = True,
+        # dynamic_range = int(sys.argv[5]))
+    
     # CIFAR10 and SVHN
     
     # rng = np.random.RandomState(1234)
@@ -148,7 +148,7 @@ if __name__ == "__main__":
     # batch_size = 128
     # gpu_batches = 391 # 391 -> 50000, 196 -> 25000, 79 -> 10000
     
-    # model = fixed_Ian_CNN_CIFAR10(rng = rng, batch_size = batch_size,
+    # model = CIFAR10_SVHN_model(rng = rng, batch_size = batch_size,
         # comp_precision = int(sys.argv[1]), update_precision = int(sys.argv[2]), 
         # initial_range = int(sys.argv[3]), max_sat = float(sys.argv[4]))
     
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     # load_path = None # "best_params_" + core_path+".pkl"
     # save_path = None # "best_params_" + core_path+".pkl" 3 careful, not in data/lisa/exp
     
-    # trainer = fixed_Trainer(rng = rng, load_path = load_path, save_path = save_path,
+    # trainer = Trainer(rng = rng, load_path = load_path, save_path = save_path,
         # train_set = train_set, valid_set = valid_set, test_set = test_set,
         # model = model,
         # LR_start = LR_start, LR_sat = 160, LR_fin = LR_start*0.1, M_start = 0.5, M_sat = 160, M_fin = 0.7, 
@@ -175,14 +175,7 @@ if __name__ == "__main__":
     print 'Training'
     
     trainer.train()
-    
-    # print 'Plotting parameters'
-    
-    # image_path = "best_params_image_" + core_path +".png"
-    # model.layer[0].parameters_image(image_path)
-    # histogram_path = "best_params_histogram_" + core_path +".png"
-    # model.layer[0].parameters_histogram(histogram_path)
-    
+
     end_time = time.clock()
     print 'The code ran for %i seconds'%(end_time - start_time)
     
