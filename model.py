@@ -24,10 +24,6 @@ import sys
 import theano 
 import theano.tensor as T
 import time
-import scipy.stats
-from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
-from theano.sandbox.cuda.basic_ops import gpu_contiguous
-from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
 from layer import Maxout_conv_layer, SoftmaxLayer, MaxoutLayer            
         
@@ -36,7 +32,7 @@ class deep_dropout_network(object):
     
     layer = []                
     
-    def __init__(self, rng, batch_size, n_hidden_layers, comp_precision, update_precision, initial_range, max_sat):
+    def __init__(self, rng, batch_size, n_hidden_layers, comp_precision, update_precision, initial_range, max_overflow):
         
         print '    Overall description:'
         print '        Batch size = %i' %(batch_size)
@@ -44,7 +40,7 @@ class deep_dropout_network(object):
         print '        Computation precision = %i bits' %(comp_precision)
         print '        Update precision = %i bits' %(update_precision)
         print '        Initial range = %i bits' %(initial_range)
-        print '        Maximum ratio of saturated variables = %f %%' %(max_sat*100)   
+        print '        Maximum overflow rate = %f %%' %(max_overflow*100)   
         
         self.rng = rng
         self.batch_size = batch_size
@@ -52,7 +48,7 @@ class deep_dropout_network(object):
         self.comp_precision = comp_precision
         self.update_precision = update_precision
         self.initial_range = initial_range
-        self.max_sat = max_sat
+        self.max_overflow = max_overflow
     
     def fprop(self, x):
     
@@ -118,8 +114,8 @@ class deep_dropout_network(object):
         self.b_save = []
         
         for k in xrange(self.n_hidden_layers+1):
-            self.W_save.append(self.layer[k].W.get_value())
-            self.b_save.append(self.layer[k].b.get_value())
+            self.W_save.append(self.layer[k].W.get_value(borrow=False))
+            self.b_save.append(self.layer[k].b.get_value(borrow=False)) 
         
     def load_params(self): 
         
@@ -155,11 +151,8 @@ class deep_dropout_network(object):
         save_file.close()
     
     # function that updates the ranges of all fixed point vectors
-    def range_updates(self,x,t):
+    def range_updates(self):
             
-        y = self.dropout_fprop(x)
-        self.bprop(y,t)
-        
         range_updates = self.layer[0].range_updates()
         for k in range(1,self.n_hidden_layers+1):
             range_updates = range_updates + self.layer[k].range_updates()
@@ -190,22 +183,22 @@ class deep_dropout_network(object):
         
         return self.layer[0].update_precision.get_value()
     
-    def set_max_ratio(self, max_ratio):
+    def set_max_overflow(self, max_overflow):
         
         for k in xrange(self.n_hidden_layers+1):
-            self.layer[k].max_ratio.set_value(max_ratio)
+            self.layer[k].max_overflow.set_value(max_overflow)
             
-    def get_max_ratio(self):
+    def get_max_overflow(self):
         
-        return self.layer[0].max_ratio.get_value()
+        return self.layer[0].max_overflow.get_value()
 
 class PI_MNIST_model(deep_dropout_network):
 
     def __init__(self, rng, batch_size, n_input, n_output, n_hidden, n_pieces, n_hidden_layers, 
         p_input,  scale_input, p_hidden, scale_hidden, max_col_norm, 
-        comp_precision, update_precision, initial_range, max_sat):
+        comp_precision, update_precision, initial_range, max_overflow):
         
-        deep_dropout_network.__init__(self, rng, batch_size, n_hidden_layers, comp_precision, update_precision, initial_range, max_sat)
+        deep_dropout_network.__init__(self, rng, batch_size, n_hidden_layers, comp_precision, update_precision, initial_range, max_overflow)
         
         print '        n_input = %i' %(n_input)
         print '        n_output = %i' %(n_output)
@@ -235,7 +228,7 @@ class PI_MNIST_model(deep_dropout_network):
             
             self.layer.append(SoftmaxLayer(rng = self.rng, n_inputs=self.n_input, n_units=self.n_output, 
                 p = self.p_input, scale = self.scale_input, max_col_norm = self.max_col_norm,
-                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))
+                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_overflow = self.max_overflow))
 
         else :
             
@@ -243,26 +236,26 @@ class PI_MNIST_model(deep_dropout_network):
             
             self.layer.append(MaxoutLayer(rng = self.rng, n_inputs = self.n_input, n_units = self.n_hidden, n_pieces = self.n_pieces, 
                 p = self.p_input, scale = self.scale_input, max_col_norm = self.max_col_norm,
-                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))
+                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_overflow = self.max_overflow))
 
             for k in range(1,self.n_hidden_layers):
                 
                 print "    Maxout layer "+str(k+1)+":"
                 self.layer.append(MaxoutLayer(rng = self.rng, n_inputs = self.n_hidden, n_units = self.n_hidden, n_pieces = self.n_pieces, 
                 p = self.p_hidden, scale = self.scale_hidden, max_col_norm = self.max_col_norm,
-                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))
+                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_overflow = self.max_overflow))
             
             print "    Softmax layer:"
             
             self.layer.append(SoftmaxLayer(rng = self.rng, n_inputs= self.n_hidden, n_units= self.n_output, 
                 p = self.p_hidden, scale = self.scale_hidden, max_col_norm = self.max_col_norm,
-                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_sat = self.max_sat))     
+                comp_precision = self.comp_precision, update_precision = self.update_precision, initial_range = self.initial_range, max_overflow = self.max_overflow))     
         
 class MNIST_model(deep_dropout_network):
     
-    def __init__(self, rng, batch_size, comp_precision, update_precision, initial_range, max_sat):
+    def __init__(self, rng, batch_size, comp_precision, update_precision, initial_range, max_overflow):
         
-        deep_dropout_network.__init__(self, rng, batch_size, 3, comp_precision, update_precision, initial_range, max_sat)
+        deep_dropout_network.__init__(self, rng, batch_size, 3, comp_precision, update_precision, initial_range, max_overflow)
         
         print "    Convolution layer 1:"
         
@@ -282,7 +275,7 @@ class MNIST_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat
+            max_overflow = max_overflow
         ))
         
         
@@ -304,7 +297,7 @@ class MNIST_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat
+            max_overflow = max_overflow
         ))   
                
         
@@ -326,7 +319,7 @@ class MNIST_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat
+            max_overflow = max_overflow
         )) 
         
         print "    Softmax layer:"
@@ -341,14 +334,14 @@ class MNIST_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat
+            max_overflow = max_overflow
         ))
         
 class CIFAR10_SVHN_model(deep_dropout_network):
     
-    def __init__(self, rng, batch_size, comp_precision, update_precision, initial_range, max_sat):
+    def __init__(self, rng, batch_size, comp_precision, update_precision, initial_range, max_overflow):
         
-        deep_dropout_network.__init__(self, rng, batch_size, 4, comp_precision, update_precision, initial_range, max_sat)
+        deep_dropout_network.__init__(self, rng, batch_size, 4, comp_precision, update_precision, initial_range, max_overflow)
         
         print "    Convolution layer 1:"
         
@@ -368,7 +361,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat,
+            max_overflow = max_overflow,
             w_LR_scale = 0.2,
             b_LR_scale = 0.2,
             # partial_sum = 32 # total number = 33*33
@@ -393,7 +386,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat,
+            max_overflow = max_overflow,
             w_LR_scale = 0.2,
             b_LR_scale = 0.2,
             # partial_sum = 16 # total number = 15*15
@@ -418,7 +411,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat,
+            max_overflow = max_overflow,
             w_LR_scale = 0.2,
             b_LR_scale = 0.2,
             # partial_sum = 8 # total number = 9*9
@@ -437,7 +430,7 @@ class CIFAR10_SVHN_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat
+            max_overflow = max_overflow
         ))
         
         print "    Softmax layer:"
@@ -452,6 +445,6 @@ class CIFAR10_SVHN_model(deep_dropout_network):
             comp_precision = comp_precision, 
             update_precision = update_precision, 
             initial_range = initial_range, 
-            max_sat = max_sat
+            max_overflow = max_overflow
         ))
           

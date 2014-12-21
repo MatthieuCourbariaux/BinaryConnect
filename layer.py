@@ -30,12 +30,12 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from fixed_point import to_fixed, new_range
+from arithmetic import to_fixed, overflow, new_range
         
 class dropout_layer(object):
     
     def __init__(self, rng, p, scale, max_col_norm, 
-        comp_precision, update_precision, initial_range, max_sat, w_LR_scale = 1., b_LR_scale = 1.):
+        comp_precision, update_precision, initial_range, max_overflow, w_LR_scale = 1., b_LR_scale = 1.):
         
         print "        p = " + str(p)
         print "        scale = " + str(scale)
@@ -54,7 +54,7 @@ class dropout_layer(object):
         # create shared variables
         self.comp_precision = theano.shared(value=comp_precision, name='comp_precision')
         self.update_precision = theano.shared(value=update_precision, name='update_precision')
-        self.max_sat = theano.shared(value=max_sat, name='max_sat')
+        self.max_overflow = theano.shared(value=max_overflow, name='max_overflow')
 
         # create shared variables for the fixed point range
         self.z_range = theano.shared(value=initial_range, name='z_range')
@@ -67,6 +67,33 @@ class dropout_layer(object):
         self.dEdb_range = theano.shared(value=initial_range, name='dEdb_range')
         self.update_w_range = theano.shared(value=initial_range, name='update_w_range')
         self.update_b_range = theano.shared(value=initial_range, name='update_b_range')
+        
+        # batch counter
+        self.batch_counter = theano.shared(value=0, name='batch_counter')
+        
+        # overflow counters
+        self.z_overflow = theano.shared(value=0., name='z_overflow')
+        self.dEdz_overflow = theano.shared(value=0., name='dEdz_overflow')
+        self.y_overflow = theano.shared(value=0., name='y_overflow')
+        self.dEdy_overflow = theano.shared(value=0., name='dEdy_overflow')
+        self.w_overflow = theano.shared(value=0., name='w_overflow')
+        self.b_overflow = theano.shared(value=0., name='b_overflow')
+        self.dEdw_overflow = theano.shared(value=0., name='dEdw_overflow')
+        self.dEdb_overflow = theano.shared(value=0., name='dEdb_overflow')
+        self.update_w_overflow = theano.shared(value=0., name='update_w_overflow')
+        self.update_b_overflow = theano.shared(value=0., name='update_b_overflow')
+    
+        # overflow counter for range-1 (needed to know when to reduce the range)
+        self.z_overflow_1 = theano.shared(value=0., name='z_overflow_1')
+        self.dEdz_overflow_1 = theano.shared(value=0., name='dEdz_overflow_1')
+        self.y_overflow_1 = theano.shared(value=0., name='y_overflow_1')
+        self.dEdy_overflow_1 = theano.shared(value=0., name='dEdy_overflow_1')
+        self.w_overflow_1 = theano.shared(value=0., name='w_overflow_1')
+        self.b_overflow_1 = theano.shared(value=0., name='b_overflow_1')
+        self.dEdw_overflow_1 = theano.shared(value=0., name='dEdw_overflow_1')
+        self.dEdb_overflow_1 = theano.shared(value=0., name='dEdb_overflow_1')
+        self.update_w_overflow_1 = theano.shared(value=0., name='update_w_overflow_1')
+        self.update_b_overflow_1 = theano.shared(value=0., name='update_b_overflow_1')
         
     def fprop(self, input):
         
@@ -152,37 +179,79 @@ class dropout_layer(object):
         updates.append((self.W, new_W))
         updates.append((self.b, new_b))
         updates.append((self.update_W, new_update_W))
-        updates.append((self.update_b, new_update_b))
+        updates.append((self.update_b, new_update_b)) 
+        
+        # batch counter
+        updates.append((self.batch_counter, self.batch_counter+1))
+        
+        # update overflow counters for the dynamic fixed point
+        updates.append((self.z_overflow, self.z_overflow + overflow(self.fixed_z, self.comp_precision, self.z_range)))
+        updates.append((self.dEdz_overflow, self.dEdz_overflow + overflow(self.fixed_dEdz, self.comp_precision, self.dEdz_range)))
+        updates.append((self.y_overflow, self.y_overflow + overflow(self.fixed_y, self.comp_precision, self.y_range)))
+        updates.append((self.dEdy_overflow, self.dEdy_overflow + overflow(self.fixed_dEdy, self.comp_precision, self.dEdy_range)))
+        updates.append((self.w_overflow, self.w_overflow + overflow(self.W, self.update_precision, self.w_range)))
+        updates.append((self.b_overflow, self.b_overflow + overflow(self.b, self.update_precision, self.b_range)))
+        updates.append((self.dEdw_overflow, self.dEdw_overflow + overflow(self.fixed_dEdW, self.comp_precision, self.dEdw_range)))
+        updates.append((self.dEdb_overflow, self.dEdb_overflow + overflow(self.fixed_dEdb, self.comp_precision, self.dEdb_range)))
+        updates.append((self.update_w_overflow, self.update_w_overflow + overflow(self.update_W, self.comp_precision, self.update_w_range)))
+        updates.append((self.update_b_overflow, self.update_b_overflow + overflow(self.update_b, self.comp_precision, self.update_b_range)))
+        
+        updates.append((self.z_overflow_1, self.z_overflow_1 + overflow(self.fixed_z, self.comp_precision, self.z_range-1)))
+        updates.append((self.dEdz_overflow_1, self.dEdz_overflow_1 + overflow(self.fixed_dEdz, self.comp_precision, self.dEdz_range-1)))
+        updates.append((self.y_overflow_1, self.y_overflow_1 + overflow(self.fixed_y, self.comp_precision, self.y_range-1)))
+        updates.append((self.dEdy_overflow_1, self.dEdy_overflow_1 + overflow(self.fixed_dEdy, self.comp_precision, self.dEdy_range-1)))
+        updates.append((self.w_overflow_1, self.w_overflow_1 + overflow(self.W, self.update_precision, self.w_range-1)))
+        updates.append((self.b_overflow_1, self.b_overflow_1 + overflow(self.b, self.update_precision, self.b_range-1)))
+        updates.append((self.dEdw_overflow_1, self.dEdw_overflow_1 + overflow(self.fixed_dEdW, self.comp_precision, self.dEdw_range-1)))
+        updates.append((self.dEdb_overflow_1, self.dEdb_overflow_1 + overflow(self.fixed_dEdb, self.comp_precision, self.dEdb_range-1)))
+        updates.append((self.update_w_overflow_1, self.update_w_overflow_1 + overflow(self.update_W, self.comp_precision, self.update_w_range-1)))
+        updates.append((self.update_b_overflow_1, self.update_b_overflow_1 + overflow(self.update_b, self.comp_precision, self.update_b_range-1)))
         
         return updates
     
     def range_updates(self):
         
-        new_z_range = new_range(self.fixed_z, self.comp_precision, self.z_range, self.max_sat)
-        new_dEdz_range = new_range(self.fixed_dEdz, self.comp_precision, self.dEdz_range, self.max_sat)
-        new_y_range = new_range(self.fixed_y, self.comp_precision, self.y_range, self.max_sat)
-        new_dEdy_range = new_range(self.fixed_dEdy, self.comp_precision, self.dEdy_range, self.max_sat)
-        new_w_range = new_range(self.W, self.update_precision, self.w_range, self.max_sat)
-        new_b_range = new_range(self.b, self.update_precision, self.b_range, self.max_sat)
-        new_dEdw_range = new_range(self.fixed_dEdW, self.comp_precision, self.dEdw_range, self.max_sat)
-        new_dEdb_range = new_range(self.fixed_dEdb, self.comp_precision, self.dEdb_range, self.max_sat)
-        new_update_w_range = new_range(self.update_W, self.comp_precision, self.update_w_range, self.max_sat)
-        new_update_b_range = new_range(self.update_b, self.comp_precision, self.update_b_range, self.max_sat)
+        updates = []
         
-        # return the updates of shared variables
-        range_updates = []
-        range_updates.append((self.z_range, new_z_range))
-        range_updates.append((self.dEdz_range, new_dEdz_range))
-        range_updates.append((self.y_range, new_y_range))
-        range_updates.append((self.dEdy_range, new_dEdy_range))
-        range_updates.append((self.w_range, new_w_range))
-        range_updates.append((self.b_range, new_b_range))
-        range_updates.append((self.dEdw_range, new_dEdw_range))
-        range_updates.append((self.dEdb_range, new_dEdb_range))
-        range_updates.append((self.update_w_range, new_update_w_range))
-        range_updates.append((self.update_b_range, new_update_b_range))
+        # update the ranges according to the overflow counters
+        updates.append((self.z_range, self.z_range+new_range(self.z_overflow/self.batch_counter,self.z_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.dEdz_range, self.dEdz_range+new_range(self.dEdz_overflow/self.batch_counter, self.dEdz_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.y_range, self.y_range+new_range(self.y_overflow/self.batch_counter, self.y_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.dEdy_range, self.dEdy_range+new_range(self.dEdy_overflow/self.batch_counter, self.dEdy_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.w_range, self.w_range+new_range(self.w_overflow/self.batch_counter, self.w_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.b_range, self.b_range+new_range(self.b_overflow/self.batch_counter, self.b_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.dEdw_range, self.dEdw_range+new_range(self.dEdw_overflow/self.batch_counter, self.dEdw_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.dEdb_range, self.dEdb_range+new_range(self.dEdb_overflow/self.batch_counter, self.dEdb_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.update_w_range, self.update_w_range+new_range(self.update_w_overflow/self.batch_counter, self.update_w_overflow_1/self.batch_counter, self.max_overflow)))
+        updates.append((self.update_b_range, self.update_b_range+new_range(self.update_b_overflow/self.batch_counter, self.update_b_overflow_1/self.batch_counter, self.max_overflow)))
         
-        return range_updates
+        # reset the batch_counter
+        updates.append((self.batch_counter, 0))
+        
+        # reset the overflow counters
+        updates.append((self.z_overflow, 0.))
+        updates.append((self.dEdz_overflow, 0.))
+        updates.append((self.y_overflow, 0.))
+        updates.append((self.dEdy_overflow, 0.))
+        updates.append((self.w_overflow, 0.))
+        updates.append((self.b_overflow, 0.))
+        updates.append((self.dEdw_overflow, 0.))
+        updates.append((self.dEdb_overflow, 0.))
+        updates.append((self.update_w_overflow, 0.))
+        updates.append((self.update_b_overflow, 0.))        
+        
+        updates.append((self.z_overflow_1, 0.))
+        updates.append((self.dEdz_overflow_1, 0.))
+        updates.append((self.y_overflow_1, 0.))
+        updates.append((self.dEdy_overflow_1, 0.))
+        updates.append((self.w_overflow_1, 0.))
+        updates.append((self.b_overflow_1, 0.))
+        updates.append((self.dEdw_overflow_1, 0.))
+        updates.append((self.dEdb_overflow_1, 0.))
+        updates.append((self.update_w_overflow_1, 0.))
+        updates.append((self.update_b_overflow_1, 0.))
+        
+        return updates
         
     def print_range(self):
         
@@ -200,7 +269,7 @@ class dropout_layer(object):
 class MaxoutLayer(dropout_layer):
 
     def __init__(self, rng, n_inputs, n_units, n_pieces, p, scale, max_col_norm, 
-        comp_precision, update_precision, initial_range, max_sat):
+        comp_precision, update_precision, initial_range, max_overflow):
         
         self.n_pieces=n_pieces
         self.n_inputs = n_inputs
@@ -212,7 +281,7 @@ class MaxoutLayer(dropout_layer):
         
         # call mother class constructor
         dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
-            comp_precision, update_precision, initial_range, max_sat)
+            comp_precision, update_precision, initial_range, max_overflow)
     
         # initial values of parameters
         low=-np.sqrt(6. / (n_inputs + n_units*n_pieces))
@@ -239,20 +308,13 @@ class MaxoutLayer(dropout_layer):
         y = T.max(y,axis=2)
         
         y = T.reshape(y,(T.shape(z)[0],self.n_units))
-        
-        # the stronger talks
-        # max = T.max(self.z,axis=2)
-        # min = T.min(self.z,axis=2)
-        # self.y0 = T.switch(T.lt(abs(min),abs(max)), max, min)
-        
-        # norme euclidienne
-        # self.y0 = T.sqrt(T.sum(T.sqr(self.z),axis=2))
+
         return y
         
 class SoftmaxLayer(dropout_layer):
     
     def __init__(self, rng, n_inputs, n_units, p, scale, max_col_norm, 
-        comp_precision, update_precision, initial_range, max_sat):
+        comp_precision, update_precision, initial_range, max_overflow):
         
         self.n_inputs = n_inputs
         self.n_units = n_units
@@ -262,7 +324,7 @@ class SoftmaxLayer(dropout_layer):
         
         # call mother class constructor
         dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
-            comp_precision, update_precision, initial_range, max_sat)
+            comp_precision, update_precision, initial_range, max_overflow)
             
         # initial values of parameters
         W_values = np.zeros((n_inputs, n_units), dtype=theano.config.floatX)
@@ -284,10 +346,10 @@ class SoftmaxLayer(dropout_layer):
 class Maxout_conv_layer(dropout_layer): 
     
     def __init__(self, rng, image_shape, zero_pad, output_shape, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm,
-            comp_precision, update_precision, initial_range, max_sat, w_LR_scale=1, b_LR_scale=1, partial_sum = 1):
+            comp_precision, update_precision, initial_range, max_overflow, w_LR_scale=1, b_LR_scale=1, partial_sum = 1):
         
         # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm, comp_precision, update_precision, initial_range, max_sat, w_LR_scale, b_LR_scale)
+        dropout_layer.__init__(self, rng, p, scale, max_col_norm, comp_precision, update_precision, initial_range, max_overflow, w_LR_scale, b_LR_scale)
         
         print '        output_shape = ' +str(output_shape)
         print '        image_shape = ' +str(image_shape)

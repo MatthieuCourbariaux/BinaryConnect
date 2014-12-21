@@ -24,10 +24,6 @@ import sys
 import theano 
 import theano.tensor as T
 import time
-import scipy.stats
-from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
-from theano.sandbox.cuda.basic_ops import gpu_contiguous
-from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
 # TRAINING
 
@@ -112,14 +108,13 @@ class Trainer(object):
         self.model.set_comp_precision(31)
         self.model.set_update_precision(31)
         
-        # train the model 1 epoch on the valid set
-        self.train_epoch(self.train_set)
+        for k in range(15):
         
-        # calculate the range
-        for k in range(20):
+            # train the model on a the valid set a few times (because valid is small)
+            self.train_epoch(self.valid_set)
+            
+            # updating the range
             self.update_range()
-        
-        # self.model.print_range()
         
         # set back the precision and the random parameters
         self.model.set_comp_precision(comp_precision)
@@ -130,7 +125,7 @@ class Trainer(object):
         
         if self.load_path != None:
             self.model.load_params_file(self.load_path)
-        
+
         self.LR = self.LR_start
         self.LR_step = (self.LR_fin-self.LR_start)/self.LR_sat 
         self.M = self.M_start 
@@ -165,15 +160,14 @@ class Trainer(object):
         self.validation_ER = self.test_epoch(self.valid_set)
         
         # test it on the test set
-        self.test_ER = self.test_epoch(self.test_set)
+        self.test_ER = self.test_epoch(self.test_set) 
         
         # update LR and M as well during the first phase
         self.update_LR()
         self.update_M()
         
         if self.dynamic_range == True : 
-            for k in range(5):
-                self.update_range()
+            self.update_range()
         
         # save the best parameters
         if self.validation_ER < self.best_validation_ER:
@@ -201,12 +195,7 @@ class Trainer(object):
             n_remaining_batches = n_batches%self.gpu_batches
         else:
             n_remaining_batches = n_batches
-           
-        # print n_batches     
-        # print n_gpu_batches        
-        # print n_remaining_batches
-        
-        # input("wait")
+
         
         shuffled_range_i = range(n_gpu_batches)
         
@@ -349,9 +338,5 @@ class Trainer(object):
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "test_batch")
                 
-        if self.dynamic_range == True :
-        
-            self.update_range = theano.function(inputs=[],updates=self.model.range_updates(x,y),givens={ 
-                    x: self.shared_x[0:self.batch_size], 
-                    y: self.shared_y[0:self.batch_size]}, 
-                    name = "update_range", on_unused_input='warn')
+        if self.dynamic_range == True : 
+            self.update_range = theano.function(inputs=[],updates=self.model.range_updates(), name = "update_range")
