@@ -1,3 +1,20 @@
+# Copyright 2014 Matthieu Courbariaux
+
+# This file is part of Deep learning arithmetic simulator.
+
+# Deep learning arithmetic simulator is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# Deep learning arithmetic simulator is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with Deep learning arithmetic simulator.  If not, see <http://www.gnu.org/licenses/>.
+
 import gzip
 import cPickle
 import numpy as np
@@ -16,7 +33,7 @@ from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 # saturation arithmetic
 # rounding
 # NOB = Number Of Bits = bit-width
-# NOIB = Number Of Integer Bits = position of the radix point
+# NOIB = Number Of Integer Bits = position of the radix point = range
 def to_fixed(X,NOB, NOIB):
     
     power = T.cast(2.**(NOB - NOIB), theano.config.floatX) # float !
@@ -27,12 +44,12 @@ def to_fixed(X,NOB, NOIB):
     value = value/power
     return value
     
-    # return X 
+# return X 
     
-    # return T.float16(X)
+# T.float16(X)
         
 # compute the new range of the fixed point representation
-def new_NOIB(vector, NOB, NOIB, max_sat):
+def new_range(vector, NOB, NOIB, max_sat):
     
     # compute the new range of the fixed point representation
     

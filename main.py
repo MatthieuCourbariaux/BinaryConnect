@@ -1,17 +1,28 @@
+# Copyright 2014 Matthieu Courbariaux
+
+# This file is part of Deep learning arithmetic simulator.
+
+# Deep learning arithmetic simulator is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# Deep learning arithmetic simulator is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with Deep learning arithmetic simulator.  If not, see <http://www.gnu.org/licenses/>.
+
+
 import gzip
 import cPickle
 import numpy as np
 import os
 import os.path
 import sys
-import theano
-import theano.tensor as T
-from theano import pp
 import time
-import scipy.stats
-from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
-from theano.sandbox.cuda.basic_ops import gpu_contiguous
-from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
 from trainer import Trainer
 from model import PI_MNIST_model, MNIST_model, CIFAR10_SVHN_model
@@ -94,7 +105,7 @@ if __name__ == "__main__":
     # PI MNIST
     
     rng = np.random.RandomState(1234)
-    LR_start = 0.2
+    LR_start = 0.1
     batch_size = 100
     gpu_batches = 500
     

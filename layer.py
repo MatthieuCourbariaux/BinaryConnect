@@ -1,3 +1,20 @@
+# Copyright 2014 Matthieu Courbariaux
+
+# This file is part of Deep learning arithmetic simulator.
+
+# Deep learning arithmetic simulator is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# Deep learning arithmetic simulator is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with Deep learning arithmetic simulator.  If not, see <http://www.gnu.org/licenses/>.
+
 import gzip
 import cPickle
 import numpy as np
@@ -13,7 +30,7 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from fixed_point import to_fixed, new_NOIB
+from fixed_point import to_fixed, new_range
         
 class dropout_layer(object):
     
@@ -141,16 +158,16 @@ class dropout_layer(object):
     
     def range_updates(self):
         
-        new_z_range = new_NOIB(self.fixed_z, self.comp_precision, self.z_range, self.max_sat)
-        new_dEdz_range = new_NOIB(self.fixed_dEdz, self.comp_precision, self.dEdz_range, self.max_sat)
-        new_y_range = new_NOIB(self.fixed_y, self.comp_precision, self.y_range, self.max_sat)
-        new_dEdy_range = new_NOIB(self.fixed_dEdy, self.comp_precision, self.dEdy_range, self.max_sat)
-        new_w_range = new_NOIB(self.W, self.update_precision, self.w_range, self.max_sat)
-        new_b_range = new_NOIB(self.b, self.update_precision, self.b_range, self.max_sat)
-        new_dEdw_range = new_NOIB(self.fixed_dEdW, self.comp_precision, self.dEdw_range, self.max_sat)
-        new_dEdb_range = new_NOIB(self.fixed_dEdb, self.comp_precision, self.dEdb_range, self.max_sat)
-        new_update_w_range = new_NOIB(self.update_W, self.comp_precision, self.update_w_range, self.max_sat)
-        new_update_b_range = new_NOIB(self.update_b, self.comp_precision, self.update_b_range, self.max_sat)
+        new_z_range = new_range(self.fixed_z, self.comp_precision, self.z_range, self.max_sat)
+        new_dEdz_range = new_range(self.fixed_dEdz, self.comp_precision, self.dEdz_range, self.max_sat)
+        new_y_range = new_range(self.fixed_y, self.comp_precision, self.y_range, self.max_sat)
+        new_dEdy_range = new_range(self.fixed_dEdy, self.comp_precision, self.dEdy_range, self.max_sat)
+        new_w_range = new_range(self.W, self.update_precision, self.w_range, self.max_sat)
+        new_b_range = new_range(self.b, self.update_precision, self.b_range, self.max_sat)
+        new_dEdw_range = new_range(self.fixed_dEdW, self.comp_precision, self.dEdw_range, self.max_sat)
+        new_dEdb_range = new_range(self.fixed_dEdb, self.comp_precision, self.dEdb_range, self.max_sat)
+        new_update_w_range = new_range(self.update_W, self.comp_precision, self.update_w_range, self.max_sat)
+        new_update_b_range = new_range(self.update_b, self.comp_precision, self.update_b_range, self.max_sat)
         
         # return the updates of shared variables
         range_updates = []
