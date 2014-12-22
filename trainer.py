@@ -36,7 +36,7 @@ class Trainer(object):
             LR_start, LR_sat, LR_fin, M_start, M_sat, M_fin, 
             batch_size, gpu_batches,
             n_epoch,
-            dynamic_range, range_update_frequency,
+            format, range_update_frequency,
             shuffle_batches, shuffle_examples):
         
         print '    Training algorithm:'
@@ -51,7 +51,7 @@ class Trainer(object):
         print '        Number of epochs = %i' %(n_epoch)
         print '        shuffle_batches = %i' %(shuffle_batches)
         print '        shuffle_examples = %i' %(shuffle_examples)
-        print '        Dynamic range = %i' %(dynamic_range)
+        print '        Format = '+ format
         print '        Range update frequency = %i' %(range_update_frequency)
 
         # save the dataset
@@ -77,7 +77,7 @@ class Trainer(object):
         self.batch_size = batch_size
         self.gpu_batches = gpu_batches
         self.n_epoch = n_epoch
-        self.dynamic_range = dynamic_range
+        self.format = format
         self.range_update_frequency = range_update_frequency
         
         # put a part of the dataset on gpu
@@ -110,15 +110,8 @@ class Trainer(object):
         self.model.set_comp_precision(31)
         self.model.set_update_precision(31)
         
+        # train one epoch to adjust the initial range
         self.train_epoch(self.train_set)
-        
-        # for k in range(15):
-        
-            # train the model on a the valid set a few times (because valid is small)
-            # self.train_epoch(self.valid_set)
-            
-            # updating the range
-            # self.update_range()
         
         # set back the precision and the random parameters
         self.model.set_comp_precision(comp_precision)
@@ -146,7 +139,7 @@ class Trainer(object):
         self.best_validation_ER = self.validation_ER
         self.best_test_ER = self.test_ER
         
-        if self.dynamic_range == True : 
+        if self.format == "DFXP" : 
             self.init_range()
  
     def update(self):
@@ -169,9 +162,6 @@ class Trainer(object):
         # update LR and M as well during the first phase
         self.update_LR()
         self.update_M()
-        
-        # if self.dynamic_range == True : 
-            # self.update_range()
         
         # save the best parameters
         if self.validation_ER < self.best_validation_ER:
@@ -201,7 +191,7 @@ class Trainer(object):
         else:
             n_remaining_batches = n_batches
         
-        # batch counter
+        # batch counter for the range update frequency
         k = 0
         
         shuffled_range_i = range(n_gpu_batches)
@@ -224,13 +214,14 @@ class Trainer(object):
 
                 self.train_batch(j, self.LR, self.M)
                 
-                if self.dynamic_range==True:
+                # update the dynamic ranges every range_update_frequency epoch
+                if self.format == "DFXP" : 
                     k+=1
                     if k==self.range_update_frequency:
                         self.update_range(k)
                         k=0
         
-        # load the last inclompete gpu batch of batches
+        # load the last incomplete gpu batch of batches
         if n_remaining_batches > 0:
         
             self.load_shared_dataset(set,
@@ -244,6 +235,13 @@ class Trainer(object):
             for j in shuffled_range_j: 
 
                 self.train_batch(j, self.LR, self.M)
+                
+                # update the dynamic ranges every range_update_frequency epoch
+                if self.format == "DFXP" : 
+                    k+=1
+                    if k==self.range_update_frequency:
+                        self.update_range(k)
+                        k=0
     
     def test_epoch(self, set):
         
@@ -251,17 +249,9 @@ class Trainer(object):
         n_gpu_batches = np.int(np.floor(n_batches/self.gpu_batches))
         
         if self.gpu_batches<=n_batches:
-            # print "here"
             n_remaining_batches = n_batches%self.gpu_batches
         else:
-            # print "there"
             n_remaining_batches = n_batches
-            
-        # print n_batches     
-        # print n_gpu_batches        
-        # print n_remaining_batches
-        
-        # input("wait")
         
         error_rate = 0.
         
@@ -275,7 +265,7 @@ class Trainer(object):
 
                 error_rate += self.test_batch(j)
         
-        # load the last inclompete gpu batch of batches
+        # load the last incomplete gpu batch of batches
         if n_remaining_batches > 0:
         
             self.load_shared_dataset(set,
@@ -316,7 +306,7 @@ class Trainer(object):
         print '        best validation error rate %f%%' %(self.best_validation_ER)
         print '        test error rate associated to best validation error %f%%' %(self.best_test_ER)
         
-        if self.dynamic_range == True : 
+        if self.format == "DFXP": 
             self.model.print_range()
     
     def train(self):        
@@ -342,7 +332,7 @@ class Trainer(object):
         # before the build, you work with symbolic variables
         # after the build, you work with numeric variables
         
-        self.train_batch = theano.function(inputs=[index,LR,M], updates=self.model.updates(x,y,LR,M,self.dynamic_range),givens={ 
+        self.train_batch = theano.function(inputs=[index,LR,M], updates=self.model.updates(x,y,LR,M),givens={ 
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "train_batch", on_unused_input='warn')
@@ -352,5 +342,5 @@ class Trainer(object):
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "test_batch")
                 
-        if self.dynamic_range == True : 
+        if self.format == "DFXP" :  
             self.update_range = theano.function(inputs=[batch_count],updates=self.model.range_updates(batch_count), name = "update_range")

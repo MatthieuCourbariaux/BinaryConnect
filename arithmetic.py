@@ -25,12 +25,38 @@ import theano
 import theano.tensor as T
 import time
 
+from theano.scalar.basic import UnaryScalarOp, same_out_nocomplex
+from theano.tensor.elemwise import Elemwise
+
+def simulate_format(format, X, NOB, NOIB):
+    
+    if format == "FXP" or format == "DFXP": 
+        return fixed_point(X,NOB, NOIB)
+        
+    elif format == "FLP":
+        return X
+        
+    elif format == "HFLP":
+        return float16(X)     
+
+# float16 function
+# we are using the nvidia function
+class Float16(UnaryScalarOp):
+
+    def impl(self, x):
+        return numpy.float32(numpy.float16(x))
+    
+    def c_code(self, node, name, (x,), (z,), sub):
+        return "%(z)s = __half2float(__float2half_rn(%(x)s));" % locals()  
+float16_scalar = Float16(same_out_nocomplex, name='float16')
+float16 = Elemwise(float16_scalar)
+        
 # this function simulate the precision and the range of a fixed point while working with floats
 # saturation arithmetic
 # rounding
 # NOB = Number Of Bits = bit-width
 # NOIB = Number Of Integer Bits = position of the radix point = range
-def to_fixed(X,NOB, NOIB):
+def fixed_point(X,NOB, NOIB):
     
     power = T.cast(2.**(NOB - NOIB), theano.config.floatX) # float !
     max = T.cast((2.**NOB)-1, theano.config.floatX)
@@ -39,10 +65,6 @@ def to_fixed(X,NOB, NOIB):
     value = T.clip(value, -max, max)
     value = value/power
     return value
-    
-    # return X 
-        
-    # T.float16(X)
         
 # compute the new range of the fixed point representation
 def new_range(overflow, overflow_1, max_overflow):

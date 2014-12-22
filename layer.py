@@ -30,11 +30,11 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from arithmetic import to_fixed, overflow, new_range
+from arithmetic import simulate_format, overflow, new_range
         
 class dropout_layer(object):
     
-    def __init__(self, rng, p, scale, max_col_norm, 
+    def __init__(self, rng, p, scale, max_col_norm, format,
         comp_precision, update_precision, initial_range, max_overflow, w_LR_scale = 1., b_LR_scale = 1.):
         
         print "        p = " + str(p)
@@ -42,6 +42,7 @@ class dropout_layer(object):
         print "        w_LR_scale = " + str(w_LR_scale)
         print "        b_LR_scale = " + str(b_LR_scale)
         print "        max_col_norm = " + str(max_col_norm)
+        print "        format = " + str(format)
         
         # save the parameters
         self.p = p
@@ -50,6 +51,7 @@ class dropout_layer(object):
         self.b_LR_scale = b_LR_scale
         self.rng = rng
         self.max_col_norm = max_col_norm
+        self.format = format
         
         # create shared variables
         self.comp_precision = theano.shared(value=comp_precision, name='comp_precision')
@@ -68,7 +70,7 @@ class dropout_layer(object):
         self.update_w_range = theano.shared(value=initial_range, name='update_w_range')
         self.update_b_range = theano.shared(value=initial_range, name='update_b_range')
         
-        # overflow counters
+        # overflow counters for current range (needed to know when to augment the range)
         self.z_overflow = theano.shared(value=0., name='z_overflow')
         self.dEdz_overflow = theano.shared(value=0., name='dEdz_overflow')
         self.y_overflow = theano.shared(value=0., name='y_overflow')
@@ -80,7 +82,7 @@ class dropout_layer(object):
         self.update_w_overflow = theano.shared(value=0., name='update_w_overflow')
         self.update_b_overflow = theano.shared(value=0., name='update_b_overflow')
     
-        # overflow counter for range-1 (needed to know when to reduce the range)
+        # overflow counter for current range-1 (needed to know when to reduce the range)
         self.z_overflow_1 = theano.shared(value=0., name='z_overflow_1')
         self.dEdz_overflow_1 = theano.shared(value=0., name='dEdz_overflow_1')
         self.y_overflow_1 = theano.shared(value=0., name='y_overflow_1')
@@ -95,14 +97,14 @@ class dropout_layer(object):
     def fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.w_comp = to_fixed(self.W, self.comp_precision, self.w_range)
-        self.b_comp = to_fixed(self.b, self.comp_precision, self.b_range)
+        self.w_comp = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.b_comp = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
         
         # scaled weighted sum
-        self.z = to_fixed(T.dot(input, self.w_comp * self.scale) + self.b_comp*self.scale, self.comp_precision, self.z_range)
+        self.z = simulate_format(self.format, T.dot(input, self.w_comp * self.scale) + self.b_comp*self.scale, self.comp_precision, self.z_range)
         
         # activation
-        self.y = to_fixed(self.activation(self.z), self.comp_precision, self.y_range)
+        self.y = simulate_format(self.format, self.activation(self.z), self.comp_precision, self.y_range)
         
         # return the output
         return self.y
@@ -110,8 +112,8 @@ class dropout_layer(object):
     def dropout_fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.fixed_W = to_fixed(self.W, self.comp_precision, self.w_range)
-        self.fixed_b = to_fixed(self.b, self.comp_precision, self.b_range)
+        self.fixed_W = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.fixed_b = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
             
         # create the dropout mask
         # The cast is important because
@@ -124,25 +126,25 @@ class dropout_layer(object):
         
         # weighted sum
         self.z = T.dot(self.fixed_x, self.fixed_W) + self.fixed_b
-        self.fixed_z = to_fixed(self.z, self.comp_precision, self.z_range)
+        self.fixed_z = simulate_format(self.format, self.z, self.comp_precision, self.z_range)
         
         # activation
         self.y = self.activation(self.fixed_z)
-        self.fixed_y = to_fixed(self.y, self.comp_precision, self.y_range)
+        self.fixed_y = simulate_format(self.format, self.y, self.comp_precision, self.y_range)
         
         # return the output
         return  self.fixed_y
     
     def bprop(self, dEdy):
    
-        self.fixed_dEdy = to_fixed(dEdy, self.comp_precision, self.dEdy_range)
+        self.fixed_dEdy = simulate_format(self.format, dEdy, self.comp_precision, self.dEdy_range)
         
         # activation
-        self.fixed_dEdz = to_fixed(T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0], self.comp_precision, self.dEdz_range)
+        self.fixed_dEdz = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0], self.comp_precision, self.dEdz_range)
          
         # compute gradients of parameters
-        self.fixed_dEdW = to_fixed(T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdw_range)
-        self.fixed_dEdb = to_fixed(T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdb_range)
+        self.fixed_dEdW = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdw_range)
+        self.fixed_dEdb = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdb_range)
         
         # weighted sum
         dEdx = T.grad(cost = None, wrt=[self.fixed_x], known_grads={self.z:self.fixed_dEdz})[0]
@@ -155,18 +157,18 @@ class dropout_layer(object):
     def parameter_updates(self, LR, M):    
         
         # compute updates
-        new_update_W = to_fixed(M * self.update_W - LR * self.w_LR_scale * self.fixed_dEdW, self.comp_precision, self.update_w_range)
-        new_update_b = to_fixed(M * self.update_b - LR * self.b_LR_scale * self.fixed_dEdb, self.comp_precision, self.update_b_range)
+        new_update_W = simulate_format(self.format, M * self.update_W - LR * self.w_LR_scale * self.fixed_dEdW, self.comp_precision, self.update_w_range)
+        new_update_b = simulate_format(self.format, M * self.update_b - LR * self.b_LR_scale * self.fixed_dEdb, self.comp_precision, self.update_b_range)
         
         # compute new parameters. Note that we use a better precision than the other operations
-        new_W = to_fixed(self.W + new_update_W, self.update_precision, self.w_range)
-        new_b = to_fixed(self.b + new_update_b, self.update_precision, self.b_range)
+        new_W = simulate_format(self.format, self.W + new_update_W, self.update_precision, self.w_range)
+        new_b = simulate_format(self.format, self.b + new_update_b, self.update_precision, self.b_range)
         
         # L2 column constraint on W
         col_norms = T.sqrt(T.sum(T.sqr(new_W), axis=0))
         # col_norms = T.max(new_W, axis=0)
         desired_norms = T.clip(col_norms, 0, self.max_col_norm) # clip = saturate below min and beyond max
-        new_W = to_fixed(new_W * (desired_norms / (1e-7 + col_norms)), self.update_precision, self.w_range)
+        new_W = simulate_format(self.format, new_W * (desired_norms / (1e-7 + col_norms)), self.update_precision, self.w_range)
         # for some reason, works better than 
         # new_W = new_W * (desired_norms / col_norms)
         # It may be a kind of regularization
@@ -265,7 +267,7 @@ class dropout_layer(object):
         
 class MaxoutLayer(dropout_layer):
 
-    def __init__(self, rng, n_inputs, n_units, n_pieces, p, scale, max_col_norm, 
+    def __init__(self, rng, n_inputs, n_units, n_pieces, p, scale, max_col_norm, format, 
         comp_precision, update_precision, initial_range, max_overflow):
         
         self.n_pieces=n_pieces
@@ -277,7 +279,7 @@ class MaxoutLayer(dropout_layer):
         print "        n_units = " + str(n_units)
         
         # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
+        dropout_layer.__init__(self, rng, p, scale, max_col_norm, format, 
             comp_precision, update_precision, initial_range, max_overflow)
     
         # initial values of parameters
@@ -310,7 +312,7 @@ class MaxoutLayer(dropout_layer):
         
 class SoftmaxLayer(dropout_layer):
     
-    def __init__(self, rng, n_inputs, n_units, p, scale, max_col_norm, 
+    def __init__(self, rng, n_inputs, n_units, p, scale, max_col_norm, format, 
         comp_precision, update_precision, initial_range, max_overflow):
         
         self.n_inputs = n_inputs
@@ -320,7 +322,7 @@ class SoftmaxLayer(dropout_layer):
         print "        n_units = " + str(n_units)
         
         # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm, 
+        dropout_layer.__init__(self, rng, p, scale, max_col_norm, format, 
             comp_precision, update_precision, initial_range, max_overflow)
             
         # initial values of parameters
@@ -342,11 +344,11 @@ class SoftmaxLayer(dropout_layer):
         
 class Maxout_conv_layer(dropout_layer): 
     
-    def __init__(self, rng, image_shape, zero_pad, output_shape, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm,
+    def __init__(self, rng, image_shape, zero_pad, output_shape, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm, format,
             comp_precision, update_precision, initial_range, max_overflow, w_LR_scale=1, b_LR_scale=1, partial_sum = 1):
         
         # call mother class constructor
-        dropout_layer.__init__(self, rng, p, scale, max_col_norm, comp_precision, update_precision, initial_range, max_overflow, w_LR_scale, b_LR_scale)
+        dropout_layer.__init__(self, rng, p, scale, max_col_norm, format, comp_precision, update_precision, initial_range, max_overflow, w_LR_scale, b_LR_scale)
         
         print '        output_shape = ' +str(output_shape)
         print '        image_shape = ' +str(image_shape)
@@ -403,8 +405,8 @@ class Maxout_conv_layer(dropout_layer):
     def fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.w_comp = to_fixed(self.W, self.comp_precision, self.w_range)
-        self.b_comp = to_fixed(self.b, self.comp_precision, self.b_range)
+        self.w_comp = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.b_comp = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
         
         input = input.reshape(self.image_shape)
         
@@ -424,19 +426,19 @@ class Maxout_conv_layer(dropout_layer):
         pooled_out = pooled_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
         
         # bias
-        pooled_out = to_fixed(pooled_out + self.b_comp.dimshuffle('x', 0, 'x', 'x')*self.scale, self.comp_precision, self.z_range)
+        pooled_out = simulate_format(self.format, pooled_out + self.b_comp.dimshuffle('x', 0, 'x', 'x')*self.scale, self.comp_precision, self.z_range)
         
         # activation
         pooled_out = self.activation(pooled_out)
-        pooled_out = to_fixed(pooled_out.flatten(2), self.comp_precision, self.y_range)
+        pooled_out = simulate_format(self.format, pooled_out.flatten(2), self.comp_precision, self.y_range)
         
         return pooled_out
     
     def dropout_fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.fixed_W = to_fixed(self.W, self.comp_precision, self.w_range)
-        self.fixed_b = to_fixed(self.b, self.comp_precision, self.b_range)
+        self.fixed_W = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.fixed_b = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
         
         # create the dropout mask
         # The cast is important because
@@ -457,7 +459,7 @@ class Maxout_conv_layer(dropout_layer):
         conv_out_shuffled = conv_op(contiguous_input, contiguous_filters)
         
         self.z = conv_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
-        self.fixed_z = to_fixed(self.z, self.comp_precision, self.z_range) 
+        self.fixed_z = simulate_format(self.format, self.z, self.comp_precision, self.z_range) 
         
         conv_out_shuffled = self.fixed_z.dimshuffle(1, 2, 3, 0) # bc01 to c01b
         conv_out_shuffled = gpu_contiguous(conv_out_shuffled)
@@ -471,25 +473,25 @@ class Maxout_conv_layer(dropout_layer):
         
         # bias
         self.u = pooled_out + self.fixed_b.dimshuffle('x', 0, 'x', 'x')
-        self.fixed_u =  to_fixed(self.u, self.comp_precision, self.z_range)
+        self.fixed_u =  simulate_format(self.format, self.u, self.comp_precision, self.z_range)
         
         # activation
         self.y = self.activation(self.fixed_u).flatten(2)
-        self.fixed_y = to_fixed(self.y, self.comp_precision, self.y_range)
+        self.fixed_y = simulate_format(self.format, self.y, self.comp_precision, self.y_range)
         
         return self.fixed_y
         
     def bprop(self, dEdy):
         
-        self.fixed_dEdy = to_fixed(dEdy.reshape(self.output_shape), self.comp_precision, self.dEdy_range)
+        self.fixed_dEdy = simulate_format(self.format, dEdy.reshape(self.output_shape), self.comp_precision, self.dEdy_range)
         
-        fixed_dEdu = to_fixed(T.grad(cost = None, wrt=[self.fixed_u], known_grads={self.y:self.fixed_dEdy})[0],  self.comp_precision,self.dEdz_range)
+        fixed_dEdu = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_u], known_grads={self.y:self.fixed_dEdy})[0],  self.comp_precision,self.dEdz_range)
         
-        self.fixed_dEdb = to_fixed(T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.u:fixed_dEdu})[0],  self.comp_precision,self.dEdb_range)
+        self.fixed_dEdb = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.u:fixed_dEdu})[0],  self.comp_precision,self.dEdb_range)
         
-        self.fixed_dEdz = to_fixed(T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.u:fixed_dEdu})[0], self.comp_precision, self.dEdz_range)
+        self.fixed_dEdz = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.u:fixed_dEdu})[0], self.comp_precision, self.dEdz_range)
         
-        self.fixed_dEdW = to_fixed(T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0],  self.comp_precision,self.dEdw_range)
+        self.fixed_dEdW = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0],  self.comp_precision,self.dEdw_range)
         
         dEdx = T.grad(cost = None, wrt=[self.fixed_x], known_grads={self.z:self.fixed_dEdz})[0]
         
