@@ -68,9 +68,6 @@ class dropout_layer(object):
         self.update_w_range = theano.shared(value=initial_range, name='update_w_range')
         self.update_b_range = theano.shared(value=initial_range, name='update_b_range')
         
-        # batch counter
-        self.batch_counter = theano.shared(value=0, name='batch_counter')
-        
         # overflow counters
         self.z_overflow = theano.shared(value=0., name='z_overflow')
         self.dEdz_overflow = theano.shared(value=0., name='dEdz_overflow')
@@ -155,7 +152,7 @@ class dropout_layer(object):
         
         return dEdx
         
-    def updates(self, LR, M):    
+    def parameter_updates(self, LR, M):    
         
         # compute updates
         new_update_W = to_fixed(M * self.update_W - LR * self.w_LR_scale * self.fixed_dEdW, self.comp_precision, self.update_w_range)
@@ -181,8 +178,11 @@ class dropout_layer(object):
         updates.append((self.update_W, new_update_W))
         updates.append((self.update_b, new_update_b)) 
         
-        # batch counter
-        updates.append((self.batch_counter, self.batch_counter+1))
+        return updates
+
+    def overflow_updates(self):
+    
+        updates = []
         
         # update overflow counters for the dynamic fixed point
         updates.append((self.z_overflow, self.z_overflow + overflow(self.fixed_z, self.comp_precision, self.z_range)))
@@ -209,25 +209,22 @@ class dropout_layer(object):
         
         return updates
     
-    def range_updates(self):
+    def range_updates(self,batch_count):
         
         updates = []
         
         # update the ranges according to the overflow counters
-        updates.append((self.z_range, self.z_range+new_range(self.z_overflow/self.batch_counter,self.z_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.dEdz_range, self.dEdz_range+new_range(self.dEdz_overflow/self.batch_counter, self.dEdz_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.y_range, self.y_range+new_range(self.y_overflow/self.batch_counter, self.y_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.dEdy_range, self.dEdy_range+new_range(self.dEdy_overflow/self.batch_counter, self.dEdy_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.w_range, self.w_range+new_range(self.w_overflow/self.batch_counter, self.w_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.b_range, self.b_range+new_range(self.b_overflow/self.batch_counter, self.b_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.dEdw_range, self.dEdw_range+new_range(self.dEdw_overflow/self.batch_counter, self.dEdw_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.dEdb_range, self.dEdb_range+new_range(self.dEdb_overflow/self.batch_counter, self.dEdb_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.update_w_range, self.update_w_range+new_range(self.update_w_overflow/self.batch_counter, self.update_w_overflow_1/self.batch_counter, self.max_overflow)))
-        updates.append((self.update_b_range, self.update_b_range+new_range(self.update_b_overflow/self.batch_counter, self.update_b_overflow_1/self.batch_counter, self.max_overflow)))
-        
-        # reset the batch_counter
-        updates.append((self.batch_counter, 0))
-        
+        updates.append((self.z_range, self.z_range+new_range(self.z_overflow/batch_count,self.z_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.dEdz_range, self.dEdz_range+new_range(self.dEdz_overflow/batch_count, self.dEdz_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.y_range, self.y_range+new_range(self.y_overflow/batch_count, self.y_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.dEdy_range, self.dEdy_range+new_range(self.dEdy_overflow/batch_count, self.dEdy_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.w_range, self.w_range+new_range(self.w_overflow/batch_count, self.w_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.b_range, self.b_range+new_range(self.b_overflow/batch_count, self.b_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.dEdw_range, self.dEdw_range+new_range(self.dEdw_overflow/batch_count, self.dEdw_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.dEdb_range, self.dEdb_range+new_range(self.dEdb_overflow/batch_count, self.dEdb_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.update_w_range, self.update_w_range+new_range(self.update_w_overflow/batch_count, self.update_w_overflow_1/batch_count, self.max_overflow)))
+        updates.append((self.update_b_range, self.update_b_range+new_range(self.update_b_overflow/batch_count, self.update_b_overflow_1/batch_count, self.max_overflow)))
+
         # reset the overflow counters
         updates.append((self.z_overflow, 0.))
         updates.append((self.dEdz_overflow, 0.))

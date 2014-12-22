@@ -122,7 +122,7 @@ if __name__ == "__main__":
         # batch_size = batch_size, gpu_batches = gpu_batches,
         # n_epoch = 1000,
         # shuffle_batches = False, shuffle_examples = True,
-        # dynamic_range = int(sys.argv[5]))
+        # dynamic_range = int(sys.argv[5]), range_update_frequency = int(sys.argv[6]))
     
     # MNIST
     
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         # batch_size = batch_size, gpu_batches = gpu_batches,
         # n_epoch = 1000,
         # shuffle_batches = False, shuffle_examples = True,
-        # dynamic_range = int(sys.argv[5]))
+        # dynamic_range = int(sys.argv[5]), range_update_frequency = int(sys.argv[6]))
     
     # CIFAR10 and SVHN
     
@@ -162,7 +162,7 @@ if __name__ == "__main__":
         batch_size = batch_size, gpu_batches = gpu_batches,
         n_epoch = 160,
         shuffle_batches = True, shuffle_examples = False,
-        dynamic_range = int(sys.argv[5]))
+        dynamic_range = int(sys.argv[5]), range_update_frequency = int(sys.argv[6]))
         
     # if I don't shuffle examples each epochs, I should at least do it at the beginning ?
     # trainer.shuffle(train_set) # do it once on SVHN

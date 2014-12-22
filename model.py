@@ -81,21 +81,42 @@ class deep_dropout_network(object):
             dEdy = self.layer[k].bprop(dEdy)
             
     # you give it the input and the target and it gives you the updates
-    def updates(self, LR, M):
+    def parameter_updates(self, LR, M):
             
         # updates
-        updates = self.layer[0].updates(LR, M)
+        parameter_updates = self.layer[0].parameter_updates(LR, M)
         for k in range(1,self.n_hidden_layers+1):
-            updates = updates + self.layer[k].updates(LR, M)
+            parameter_updates = parameter_updates + self.layer[k].parameter_updates(LR, M)
         
-        return updates
+        return parameter_updates
+        
+    # function that updates the ranges of all fixed point vectors
+    def range_updates(self,batch_count):
+            
+        range_updates = self.layer[0].range_updates(batch_count)
+        for k in range(1,self.n_hidden_layers+1):
+            range_updates = range_updates + self.layer[k].range_updates(batch_count)
+        
+        return range_updates
+        
+    # function that updates the ranges of all fixed point vectors
+    def overflow_updates(self):
+            
+        overflow_updates = self.layer[0].overflow_updates()
+        for k in range(1,self.n_hidden_layers+1):
+            overflow_updates = overflow_updates + self.layer[k].overflow_updates()
+        
+        return overflow_updates
 
     # train function
-    def bprop_updates(self, x, t, LR, M):
+    def updates(self, x, t, LR, M, dynamic_range):
     
         y = self.dropout_fprop(x)
         self.bprop(y,t)
-        updates = self.updates(LR,M)
+        updates = self.parameter_updates(LR,M)
+        
+        if dynamic_range == True:
+            updates += self.overflow_updates()
         
         return updates   
     
@@ -150,15 +171,7 @@ class deep_dropout_network(object):
         # close the file
         save_file.close()
     
-    # function that updates the ranges of all fixed point vectors
-    def range_updates(self):
-            
-        range_updates = self.layer[0].range_updates()
-        for k in range(1,self.n_hidden_layers+1):
-            range_updates = range_updates + self.layer[k].range_updates()
-        
-        return range_updates
-        
+
     def print_range(self):
         
         for k in xrange(self.n_hidden_layers+1):

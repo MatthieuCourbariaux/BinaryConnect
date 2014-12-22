@@ -36,7 +36,7 @@ class Trainer(object):
             LR_start, LR_sat, LR_fin, M_start, M_sat, M_fin, 
             batch_size, gpu_batches,
             n_epoch,
-            dynamic_range,
+            dynamic_range, range_update_frequency,
             shuffle_batches, shuffle_examples):
         
         print '    Training algorithm:'
@@ -52,6 +52,7 @@ class Trainer(object):
         print '        shuffle_batches = %i' %(shuffle_batches)
         print '        shuffle_examples = %i' %(shuffle_examples)
         print '        Dynamic range = %i' %(dynamic_range)
+        print '        Range update frequency = %i' %(range_update_frequency)
 
         # save the dataset
         self.rng = rng
@@ -77,6 +78,7 @@ class Trainer(object):
         self.gpu_batches = gpu_batches
         self.n_epoch = n_epoch
         self.dynamic_range = dynamic_range
+        self.range_update_frequency = range_update_frequency
         
         # put a part of the dataset on gpu
         self.shared_x = theano.shared(
@@ -108,13 +110,15 @@ class Trainer(object):
         self.model.set_comp_precision(31)
         self.model.set_update_precision(31)
         
-        for k in range(15):
+        self.train_epoch(self.train_set)
+        
+        # for k in range(15):
         
             # train the model on a the valid set a few times (because valid is small)
-            self.train_epoch(self.valid_set)
+            # self.train_epoch(self.valid_set)
             
             # updating the range
-            self.update_range()
+            # self.update_range()
         
         # set back the precision and the random parameters
         self.model.set_comp_precision(comp_precision)
@@ -166,8 +170,8 @@ class Trainer(object):
         self.update_LR()
         self.update_M()
         
-        if self.dynamic_range == True : 
-            self.update_range()
+        # if self.dynamic_range == True : 
+            # self.update_range()
         
         # save the best parameters
         if self.validation_ER < self.best_validation_ER:
@@ -186,16 +190,19 @@ class Trainer(object):
     
     def train_epoch(self, set):
         
+        # number of batch in the dataset
         n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
-
-        
+        # number of group of batches (in the memory of the GPU)
         n_gpu_batches = np.int(np.floor(n_batches/self.gpu_batches))
         
+        # number of batches in the last group
         if self.gpu_batches<=n_batches:
             n_remaining_batches = n_batches%self.gpu_batches
         else:
             n_remaining_batches = n_batches
-
+        
+        # batch counter
+        k = 0
         
         shuffled_range_i = range(n_gpu_batches)
         
@@ -216,6 +223,12 @@ class Trainer(object):
             for j in shuffled_range_j: 
 
                 self.train_batch(j, self.LR, self.M)
+                
+                if self.dynamic_range==True:
+                    k+=1
+                    if k==self.range_update_frequency:
+                        self.update_range(k)
+                        k=0
         
         # load the last inclompete gpu batch of batches
         if n_remaining_batches > 0:
@@ -322,13 +335,14 @@ class Trainer(object):
         x = T.matrix('x')
         y = T.matrix('y')
         index = T.lscalar() 
+        batch_count = T.lscalar() 
         LR = T.scalar('LR', dtype=theano.config.floatX)
         M = T.scalar('M', dtype=theano.config.floatX)
 
         # before the build, you work with symbolic variables
         # after the build, you work with numeric variables
         
-        self.train_batch = theano.function(inputs=[index,LR,M], updates=self.model.bprop_updates(x,y,LR,M),givens={ 
+        self.train_batch = theano.function(inputs=[index,LR,M], updates=self.model.updates(x,y,LR,M,self.dynamic_range),givens={ 
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "train_batch", on_unused_input='warn')
@@ -339,4 +353,4 @@ class Trainer(object):
                 name = "test_batch")
                 
         if self.dynamic_range == True : 
-            self.update_range = theano.function(inputs=[],updates=self.model.range_updates(), name = "update_range")
+            self.update_range = theano.function(inputs=[batch_count],updates=self.model.range_updates(batch_count), name = "update_range")
