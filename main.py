@@ -198,7 +198,7 @@ if __name__ == "__main__":
         rng = np.random.RandomState(1234)
         LR_start = 0.05
         batch_size = 128
-        gpu_batches = 391 # 391 -> 50000, 196 -> 25000, 79 -> 10000
+        gpu_batches = 79 # 391 -> 50000, 196 -> 25000, 79 -> 10000
         n_epoch = 160
         
         model = CIFAR10_SVHN_model(rng = rng, batch_size = batch_size, format = format,
@@ -208,7 +208,7 @@ if __name__ == "__main__":
         trainer = Trainer(rng = rng, load_path = None, save_path = None,
             train_set = train_set, valid_set = valid_set, test_set = test_set,
             model = model,
-            LR_start = LR_start, LR_sat = n_epoch, LR_fin = LR_start/10, M_start = 0.5, M_sat = n_epoch, M_fin = 0.7, 
+            LR_start = LR_start, LR_sat = n_epoch/2, LR_fin = LR_start/10, M_start = 0.5, M_sat = n_epoch/2, M_fin = 0.7, 
             batch_size = batch_size, gpu_batches = gpu_batches,
             n_epoch = n_epoch,
             shuffle_batches = True, shuffle_examples = False,
