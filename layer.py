@@ -418,7 +418,7 @@ class Maxout_conv_layer(dropout_layer):
     # activation function
     def activation(self,conv_out):
         
-        conv_out = T.reshape(conv_out,(T.shape(conv_out)[0], T.shape(conv_out)[1]/self.n_pieces, self.n_pieces,T.shape(conv_out)[2],T.shape(conv_out)[3] ))
+        conv_out = T.reshape(conv_out,(T.shape(conv_out)[0], T.shape(conv_out)[1]//self.n_pieces, self.n_pieces,T.shape(conv_out)[2],T.shape(conv_out)[3] ))
         return T.max( conv_out,axis=2)
         
     def fprop(self, input):

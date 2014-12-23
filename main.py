@@ -29,6 +29,7 @@ from model import PI_MNIST_model, MNIST_model, CIFAR10_SVHN_model
 from pylearn2.datasets.mnist import MNIST   
 from pylearn2.datasets.zca_dataset import ZCA_Dataset    
 from pylearn2.datasets.svhn import SVHN
+from pylearn2.utils import serial
           
 def onehot(x,numclasses=None):
 
@@ -69,18 +70,18 @@ if __name__ == "__main__":
         test_set.y = np.float32(onehot(test_set.y))
         
     elif dataset == "CIFAR10":
-            
-        preprocessor = cPickle.load(open("/data/lisa/data/cifar10/pylearn2_gcn_whitened/preprocessor.pkl",'rb'))
+        
+        preprocessor = serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/preprocessor.pkl")
         train_set = ZCA_Dataset(
-            preprocessed_dataset=cPickle.load(open("/data/lisa/data/cifar10/pylearn2_gcn_whitened/train.pkl",'rb')), 
+            preprocessed_dataset=serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
             preprocessor = preprocessor,
             start=0, stop = 45000)
         valid_set = ZCA_Dataset(
-            preprocessed_dataset= cPickle.load(open("/data/lisa/data/cifar10/pylearn2_gcn_whitened/train.pkl",'rb')), 
+            preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
             preprocessor = preprocessor,
             start=45000, stop = 50000)  
         test_set = ZCA_Dataset(
-            preprocessed_dataset= cPickle.load(open("/data/lisa/data/cifar10/pylearn2_gcn_whitened/test.pkl",'rb')), 
+            preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/test.pkl"), 
             preprocessor = preprocessor) 
         
         # for both datasets, onehot the target
@@ -133,7 +134,7 @@ if __name__ == "__main__":
         LR_start = 0.05
         batch_size = 100
         gpu_batches = 500
-        n_epoch = 1000 
+        n_epoch = 800 
         
         model = PI_MNIST_model(rng = rng, batch_size = batch_size,
             n_input = 784, n_output = 10, n_hidden = 240, n_pieces = 5, n_hidden_layers = 2, 
@@ -177,7 +178,7 @@ if __name__ == "__main__":
         rng = np.random.RandomState(1234)
         LR_start = 0.02
         batch_size = 128
-        gpu_batches = 391 # 391 -> 50000, 196 -> 25000, 79 -> 10000
+        gpu_batches = 79 # 391 -> 50000, 196 -> 25000, 79 -> 10000
         n_epoch = 400
         
         model = CIFAR10_SVHN_model(rng = rng, batch_size = batch_size, format = format,
@@ -199,7 +200,7 @@ if __name__ == "__main__":
         LR_start = 0.05
         batch_size = 128
         gpu_batches = 79 # 391 -> 50000, 196 -> 25000, 79 -> 10000
-        n_epoch = 160
+        n_epoch = 200
         
         model = CIFAR10_SVHN_model(rng = rng, batch_size = batch_size, format = format,
             comp_precision = comp_precision, update_precision = update_precision, 
