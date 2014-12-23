@@ -135,16 +135,20 @@ class dropout_layer(object):
         # return the output
         return  self.fixed_y
     
+    def activation(self):
+        
+        raise NotImplementedError("Subclass must implement abstract method")
+    
     def activation_bprop(self):
         
-        return T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0]
-    
+        raise NotImplementedError("Subclass must implement abstract method")
+        
     def bprop(self, dEdy):
    
         self.fixed_dEdy = simulate_format(self.format, dEdy, self.comp_precision, self.dEdy_range)
         
         # activation
-        self.fixed_dEdz = simulate_format(self.format, self.activation_bprop(), self.comp_precision, self.dEdz_range)
+        self.activation_bprop()
          
         # compute gradients of parameters
         self.fixed_dEdW = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdw_range)
@@ -313,6 +317,12 @@ class MaxoutLayer(dropout_layer):
         y = T.reshape(y,(T.shape(z)[0],self.n_units))
 
         return y
+    
+    def activation_bprop(self):
+    
+        self.fixed_dEdz = simulate_format(self.format, 
+            T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0], 
+            self.comp_precision, self.dEdz_range)
         
 class SoftmaxLayer(dropout_layer):
     
@@ -348,12 +358,13 @@ class SoftmaxLayer(dropout_layer):
         
     def activation_bprop(self):
         
-        return self.fixed_dEdy
+        self.fixed_dEdz = simulate_format(self.format, self.fixed_dEdy, 
+            self.comp_precision, self.dEdz_range)
         
 class Maxout_conv_layer(dropout_layer): 
     
     def __init__(self, rng, image_shape, zero_pad, output_shape, filter_shape, filter_stride, n_pieces, pool_shape, pool_stride, p, scale, max_col_norm, format,
-            comp_precision, update_precision, initial_range, max_overflow, w_LR_scale=1, b_LR_scale=1, partial_sum = 1):
+            comp_precision, update_precision, initial_range, max_overflow, w_LR_scale=1., b_LR_scale=1., partial_sum = 1):
         
         # call mother class constructor
         dropout_layer.__init__(self, rng, p, scale, max_col_norm, format, comp_precision, update_precision, initial_range, max_overflow, w_LR_scale, b_LR_scale)

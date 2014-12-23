@@ -233,7 +233,7 @@ class Trainer(object):
             
             shuffled_range_j = range(n_remaining_batches)
             if self.shuffle_batches==True:
-                    self.rng.shuffle(shuffled_range_j)
+                self.rng.shuffle(shuffled_range_j)
             
             for j in shuffled_range_j: 
 
