@@ -36,7 +36,7 @@ class Trainer(object):
             LR_start, LR_sat, LR_fin, M_start, M_sat, M_fin, 
             batch_size, gpu_batches,
             n_epoch,
-            format, range_update_frequency,
+            format, range_update_frequency, range_init_epoch,
             shuffle_batches, shuffle_examples):
         
         print '    Training algorithm:'
@@ -53,6 +53,7 @@ class Trainer(object):
         print '        shuffle_examples = %i' %(shuffle_examples)
         print '        Format = '+ format
         print '        Range update frequency = %i' %(range_update_frequency)
+        print '        Range init epochs = %i' %(range_init_epoch)
 
         # save the dataset
         self.rng = rng
@@ -79,6 +80,7 @@ class Trainer(object):
         self.n_epoch = n_epoch
         self.format = format
         self.range_update_frequency = range_update_frequency
+        self.range_init_epoch = range_init_epoch
         
         # put a part of the dataset on gpu
         self.shared_x = theano.shared(
@@ -110,8 +112,9 @@ class Trainer(object):
         self.model.set_comp_precision(31)
         self.model.set_update_precision(31)
         
-        # train one epoch to adjust the initial range
-        self.train_epoch(self.train_set)
+        # train n epochs to adjust the initial range
+        for k in range(self.range_init_epoch):
+            self.train_epoch(self.train_set)
         
         # set back the precision and the random parameters
         self.model.set_comp_precision(comp_precision)

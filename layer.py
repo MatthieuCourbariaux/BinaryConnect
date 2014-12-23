@@ -135,12 +135,16 @@ class dropout_layer(object):
         # return the output
         return  self.fixed_y
     
+    def activation_bprop(self):
+        
+        return T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0]
+    
     def bprop(self, dEdy):
    
         self.fixed_dEdy = simulate_format(self.format, dEdy, self.comp_precision, self.dEdy_range)
         
         # activation
-        self.fixed_dEdz = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0], self.comp_precision, self.dEdz_range)
+        self.fixed_dEdz = simulate_format(self.format, self.activation_bprop(), self.comp_precision, self.dEdz_range)
          
         # compute gradients of parameters
         self.fixed_dEdW = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdw_range)
@@ -341,6 +345,10 @@ class SoftmaxLayer(dropout_layer):
     def activation(self,z):
         
         return T.nnet.softmax(z)
+        
+    def activation_bprop(self):
+        
+        return self.fixed_dEdy
         
 class Maxout_conv_layer(dropout_layer): 
     
