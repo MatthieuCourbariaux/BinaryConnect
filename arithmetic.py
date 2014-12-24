@@ -40,7 +40,7 @@ def simulate_format(format, X, NOB, NOIB):
         return float16(X)     
 
 # float16 function
-# we are using the nvidia function
+# we are using the nvidia cuda function (only works on GPU)
 class Float16(UnaryScalarOp):
 
     def impl(self, x):
@@ -51,9 +51,8 @@ class Float16(UnaryScalarOp):
 float16_scalar = Float16(same_out_nocomplex, name='float16')
 float16 = Elemwise(float16_scalar)
         
-# this function simulate the precision and the range of a fixed point while working with floats
-# saturation arithmetic
-# rounding
+# this function simulate the precision and the range of a fixed point 
+# while working with floats
 # NOB = Number Of Bits = bit-width
 # NOIB = Number Of Integer Bits = position of the radix point = range
 def fixed_point(X,NOB, NOIB):
@@ -61,24 +60,23 @@ def fixed_point(X,NOB, NOIB):
     power = T.cast(2.**(NOB - NOIB), theano.config.floatX) # float !
     max = T.cast((2.**NOB)-1, theano.config.floatX)
     value = X*power    
-    value = T.round(value) #value = T.floor(value)
-    value = T.clip(value, -max, max)
+    value = T.round(value) # rounding
+    value = T.clip(value, -max, max) # saturation arithmetic
     value = value/power
     return value
         
-# compute the new range of the fixed point representation
+# compute the new range of the dynamic fixed point representation
 def new_range(overflow, overflow_1, max_overflow):
     
-    # the goal is to have a new NOIB with  (overflow_rate(NOIB) <= max_overflow_rate) and (overflow_rate(NOIB+1) > max_overflow_rate)
-    # the incremental solution is to :
-        # compute the overflow_rate of NOIB and NOIB-1
-        # increment NOIB if overflow_rate(NOIB)>max_overflow_rate
-        # decrement NOIB if overflow_rate(NOIB-1)<= max_overflow_rate
-        # keep NOIB if overflow_rate(NOIB) <= max_overflow_rate and overflow_rate(NOIB-1)> max_overflow_rate
+    # the goal is to update the range of the vector 
+    # we know the overflow rates associated with range (overflow) 
+    # and range-1 (overflow_1)
+    # if (overflow > max_overflow): increment range
+    # else if (overflow_1 < max_overflow): decrement range
     return T.switch(T.gt(overflow, max_overflow), 1, 
         T.switch(T.gt(overflow_1, max_overflow), 0, - 1))
 
-# Overflow counter of a vector knowing its NOIB and NOB
+# Overflow rate of a vector knowing its NOIB and NOB
 def overflow(vector, NOB, NOIB):
     
     # compute the max value of the fixed point representation (i.e. the overflow value)
