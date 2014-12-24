@@ -62,5 +62,5 @@ Number of epochs of range initialization:
 Examples:
     python simulator.py PI_MNIST FLP
     python simulator.py SVHN FXP 5 19 19
-    python simulator.py CIFAR10 DFXP 5 9 11 200 0.0001 1
+    python simulator.py CIFAR10 DFXP 5 9 11 100 0.0001 2
         
