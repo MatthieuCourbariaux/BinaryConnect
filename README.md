@@ -1,6 +1,7 @@
 # Deep learning low-precision arithmetic simulator
 
 ## Requirements
+
 * Theano 0.6
 * Pylearn2 0.1 
 * PyTables (for the SVHN dataset)
@@ -9,12 +10,12 @@
 ## Goal
 
 This code was written to allow anyone to easily reproduce the results 
-presented in the arxiv paper http://arxiv.org/abs/1412.7024 .
+presented in the arxiv paper http://arxiv.org/abs/1412.7024
 However, the results might slightly vary depending on the environment.
 
 ## How to use
 
-The simulator is relatively easy to use:
+### Command line
 
     python simulator.py task format [initial range] [computations bit-width] 
         [parameters updates bit-width] [range update frequency]
@@ -27,9 +28,11 @@ A predetermined model is associated with each of those tasks
 (The models are stored in model.py).
 For the SVHN dataset, 
 you need to set an environment variable: 
-SVHN_LOCAL_PATH=/tmp/SVHN/ 
+
+    SVHN_LOCAL_PATH=/tmp/SVHN/ 
+    
 You then need to pre-process it with the script 
-utilities/svhn_preprocessing.py (courtesy of pylearn2)
+utilities/svhn_preprocessing.py (script from pylearn2)
 
 ### Format
 There are 4 different formats: floating point (FLP), 
@@ -64,7 +67,8 @@ Once the radix point is positioned,
 the parameters are reinitialized, and the DFXP training can begin.    
         
 ### Examples
-* python simulator.py PI_MNIST FLP
-* python simulator.py SVHN FXP 5 19 19
-* python simulator.py CIFAR10 DFXP 5 9 11 100 0.0001 2
+
+    python simulator.py PI_MNIST FLP
+    python simulator.py SVHN FXP 5 19 19
+    python simulator.py CIFAR10 DFXP 5 9 11 100 0.0001 2
         
