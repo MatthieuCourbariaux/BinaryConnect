@@ -1,19 +1,19 @@
 # Copyright 2014 Matthieu Courbariaux
 
-# This file is part of Deep learning arithmetic simulator.
+# This file is part of deep-learning-storage.
 
-# Deep learning arithmetic simulator is free software: you can redistribute it and/or modify
+# deep-learning-storage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-# Deep learning arithmetic simulator is distributed in the hope that it will be useful,
+# deep-learning-storage is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with Deep learning arithmetic simulator.  If not, see <http://www.gnu.org/licenses/>.
+# along with deep-learning-storage.  If not, see <http://www.gnu.org/licenses/>.
 
 import gzip
 import cPickle
@@ -30,7 +30,7 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from arithmetic import simulate_format, overflow, new_range
+from format import apply_format, overflow, new_range
         
 class dropout_layer(object):
     
@@ -97,14 +97,14 @@ class dropout_layer(object):
     def fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.w_comp = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
-        self.b_comp = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
+        self.w_comp = apply_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.b_comp = apply_format(self.format, self.b, self.comp_precision, self.b_range)
         
         # scaled weighted sum
-        self.z = simulate_format(self.format, T.dot(input, self.w_comp * self.scale) + self.b_comp*self.scale, self.comp_precision, self.z_range)
+        self.z = apply_format(self.format, T.dot(input, self.w_comp * self.scale) + self.b_comp*self.scale, self.comp_precision, self.z_range)
         
         # activation
-        self.y = simulate_format(self.format, self.activation(self.z), self.comp_precision, self.y_range)
+        self.y = apply_format(self.format, self.activation(self.z), self.comp_precision, self.y_range)
         
         # return the output
         return self.y
@@ -112,8 +112,8 @@ class dropout_layer(object):
     def dropout_fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.fixed_W = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
-        self.fixed_b = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
+        self.fixed_W = apply_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.fixed_b = apply_format(self.format, self.b, self.comp_precision, self.b_range)
             
         # create the dropout mask
         # The cast is important because
@@ -126,11 +126,11 @@ class dropout_layer(object):
         
         # weighted sum
         self.z = T.dot(self.fixed_x, self.fixed_W) + self.fixed_b
-        self.fixed_z = simulate_format(self.format, self.z, self.comp_precision, self.z_range)
+        self.fixed_z = apply_format(self.format, self.z, self.comp_precision, self.z_range)
         
         # activation
         self.y = self.activation(self.fixed_z)
-        self.fixed_y = simulate_format(self.format, self.y, self.comp_precision, self.y_range)
+        self.fixed_y = apply_format(self.format, self.y, self.comp_precision, self.y_range)
         
         # return the output
         return  self.fixed_y
@@ -145,14 +145,14 @@ class dropout_layer(object):
         
     def bprop(self, dEdy):
    
-        self.fixed_dEdy = simulate_format(self.format, dEdy, self.comp_precision, self.dEdy_range)
+        self.fixed_dEdy = apply_format(self.format, dEdy, self.comp_precision, self.dEdy_range)
         
         # activation
         self.activation_bprop()
          
         # compute gradients of parameters
-        self.fixed_dEdW = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdw_range)
-        self.fixed_dEdb = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdb_range)
+        self.fixed_dEdW = apply_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdw_range)
+        self.fixed_dEdb = apply_format(self.format, T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.z:self.fixed_dEdz})[0], self.comp_precision, self.dEdb_range)
         
         # weighted sum
         dEdx = T.grad(cost = None, wrt=[self.fixed_x], known_grads={self.z:self.fixed_dEdz})[0]
@@ -165,18 +165,18 @@ class dropout_layer(object):
     def parameter_updates(self, LR, M):    
         
         # compute updates
-        new_update_W = simulate_format(self.format, M * self.update_W - LR * self.w_LR_scale * self.fixed_dEdW, self.comp_precision, self.update_w_range)
-        new_update_b = simulate_format(self.format, M * self.update_b - LR * self.b_LR_scale * self.fixed_dEdb, self.comp_precision, self.update_b_range)
+        new_update_W = apply_format(self.format, M * self.update_W - LR * self.w_LR_scale * self.fixed_dEdW, self.comp_precision, self.update_w_range)
+        new_update_b = apply_format(self.format, M * self.update_b - LR * self.b_LR_scale * self.fixed_dEdb, self.comp_precision, self.update_b_range)
         
         # compute new parameters. Note that we use a better precision than the other operations
-        new_W = simulate_format(self.format, self.W + new_update_W, self.update_precision, self.w_range)
-        new_b = simulate_format(self.format, self.b + new_update_b, self.update_precision, self.b_range)
+        new_W = apply_format(self.format, self.W + new_update_W, self.update_precision, self.w_range)
+        new_b = apply_format(self.format, self.b + new_update_b, self.update_precision, self.b_range)
         
         # L2 column constraint on W
         col_norms = T.sqrt(T.sum(T.sqr(new_W), axis=0))
         # col_norms = T.max(new_W, axis=0)
         desired_norms = T.clip(col_norms, 0, self.max_col_norm) # clip = saturate below min and beyond max
-        new_W = simulate_format(self.format, new_W * (desired_norms / (1e-7 + col_norms)), self.update_precision, self.w_range)
+        new_W = apply_format(self.format, new_W * (desired_norms / (1e-7 + col_norms)), self.update_precision, self.w_range)
         # for some reason, works better than 
         # new_W = new_W * (desired_norms / col_norms)
         # It may be a kind of regularization
@@ -320,7 +320,7 @@ class MaxoutLayer(dropout_layer):
     
     def activation_bprop(self):
     
-        self.fixed_dEdz = simulate_format(self.format, 
+        self.fixed_dEdz = apply_format(self.format, 
             T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.y:self.fixed_dEdy})[0], 
             self.comp_precision, self.dEdz_range)
         
@@ -358,7 +358,7 @@ class SoftmaxLayer(dropout_layer):
         
     def activation_bprop(self):
         
-        self.fixed_dEdz = simulate_format(self.format, self.fixed_dEdy, 
+        self.fixed_dEdz = apply_format(self.format, self.fixed_dEdy, 
             self.comp_precision, self.dEdz_range)
         
 class Maxout_conv_layer(dropout_layer): 
@@ -424,8 +424,8 @@ class Maxout_conv_layer(dropout_layer):
     def fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.w_comp = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
-        self.b_comp = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
+        self.w_comp = apply_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.b_comp = apply_format(self.format, self.b, self.comp_precision, self.b_range)
         
         input = input.reshape(self.image_shape)
         
@@ -445,19 +445,19 @@ class Maxout_conv_layer(dropout_layer):
         pooled_out = pooled_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
         
         # bias
-        pooled_out = simulate_format(self.format, pooled_out + self.b_comp.dimshuffle('x', 0, 'x', 'x')*self.scale, self.comp_precision, self.z_range)
+        pooled_out = apply_format(self.format, pooled_out + self.b_comp.dimshuffle('x', 0, 'x', 'x')*self.scale, self.comp_precision, self.z_range)
         
         # activation
         pooled_out = self.activation(pooled_out)
-        pooled_out = simulate_format(self.format, pooled_out.flatten(2), self.comp_precision, self.y_range)
+        pooled_out = apply_format(self.format, pooled_out.flatten(2), self.comp_precision, self.y_range)
         
         return pooled_out
     
     def dropout_fprop(self, input):
         
         # we reduce the precision of parameters for the computations
-        self.fixed_W = simulate_format(self.format, self.W, self.comp_precision, self.w_range)
-        self.fixed_b = simulate_format(self.format, self.b, self.comp_precision, self.b_range)
+        self.fixed_W = apply_format(self.format, self.W, self.comp_precision, self.w_range)
+        self.fixed_b = apply_format(self.format, self.b, self.comp_precision, self.b_range)
         
         # create the dropout mask
         # The cast is important because
@@ -478,7 +478,7 @@ class Maxout_conv_layer(dropout_layer):
         conv_out_shuffled = conv_op(contiguous_input, contiguous_filters)
         
         self.z = conv_out_shuffled.dimshuffle(3, 0, 1, 2) # c01b to bc01
-        self.fixed_z = simulate_format(self.format, self.z, self.comp_precision, self.z_range) 
+        self.fixed_z = apply_format(self.format, self.z, self.comp_precision, self.z_range) 
         
         conv_out_shuffled = self.fixed_z.dimshuffle(1, 2, 3, 0) # bc01 to c01b
         conv_out_shuffled = gpu_contiguous(conv_out_shuffled)
@@ -492,25 +492,25 @@ class Maxout_conv_layer(dropout_layer):
         
         # bias
         self.u = pooled_out + self.fixed_b.dimshuffle('x', 0, 'x', 'x')
-        self.fixed_u =  simulate_format(self.format, self.u, self.comp_precision, self.z_range)
+        self.fixed_u =  apply_format(self.format, self.u, self.comp_precision, self.z_range)
         
         # activation
         self.y = self.activation(self.fixed_u).flatten(2)
-        self.fixed_y = simulate_format(self.format, self.y, self.comp_precision, self.y_range)
+        self.fixed_y = apply_format(self.format, self.y, self.comp_precision, self.y_range)
         
         return self.fixed_y
         
     def bprop(self, dEdy):
         
-        self.fixed_dEdy = simulate_format(self.format, dEdy.reshape(self.output_shape), self.comp_precision, self.dEdy_range)
+        self.fixed_dEdy = apply_format(self.format, dEdy.reshape(self.output_shape), self.comp_precision, self.dEdy_range)
         
-        fixed_dEdu = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_u], known_grads={self.y:self.fixed_dEdy})[0],  self.comp_precision,self.dEdz_range)
+        fixed_dEdu = apply_format(self.format, T.grad(cost = None, wrt=[self.fixed_u], known_grads={self.y:self.fixed_dEdy})[0],  self.comp_precision,self.dEdz_range)
         
-        self.fixed_dEdb = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.u:fixed_dEdu})[0],  self.comp_precision,self.dEdb_range)
+        self.fixed_dEdb = apply_format(self.format, T.grad(cost = None, wrt=[self.fixed_b], known_grads={self.u:fixed_dEdu})[0],  self.comp_precision,self.dEdb_range)
         
-        self.fixed_dEdz = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.u:fixed_dEdu})[0], self.comp_precision, self.dEdz_range)
+        self.fixed_dEdz = apply_format(self.format, T.grad(cost = None, wrt=[self.fixed_z], known_grads={self.u:fixed_dEdu})[0], self.comp_precision, self.dEdz_range)
         
-        self.fixed_dEdW = simulate_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0],  self.comp_precision,self.dEdw_range)
+        self.fixed_dEdW = apply_format(self.format, T.grad(cost = None, wrt=[self.fixed_W], known_grads={self.z:self.fixed_dEdz})[0],  self.comp_precision,self.dEdw_range)
         
         dEdx = T.grad(cost = None, wrt=[self.fixed_x], known_grads={self.z:self.fixed_dEdz})[0]
         

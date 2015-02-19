@@ -1,19 +1,19 @@
 # Copyright 2014 Matthieu Courbariaux
 
-# This file is part of Deep learning arithmetic simulator.
+# This file is part of deep-learning-storage.
 
-# Deep learning arithmetic simulator is free software: you can redistribute it and/or modify
+# deep-learning-storage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-# Deep learning arithmetic simulator is distributed in the hope that it will be useful,
+# deep-learning-storage is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with Deep learning arithmetic simulator.  If not, see <http://www.gnu.org/licenses/>.
+# along with deep-learning-storage.  If not, see <http://www.gnu.org/licenses/>.
 
 import gzip
 import cPickle
