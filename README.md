@@ -25,7 +25,7 @@ Please note however that the results will slightly vary depending on the environ
 
 There are 4 different tasks: the permutation invariant MNIST (PI_MNIST), 
 MNIST, CIFAR10 and SVHN.
-A set of hyperaparameters is associated with each of those tasks 
+A set of hyperparameters is associated with each of those tasks 
 (They are stored in model.py).
 For the SVHN dataset, 
 you need to set an environment variable: 
