@@ -30,37 +30,28 @@ import time
 class Trainer(object):
     
     def __init__(self,
-            rng, save_path, load_path,
+            rng,
             train_set, valid_set, test_set,
             model,
-            LR_start, LR_sat, LR_fin, M_start, M_sat, M_fin, 
+            LR, LR_decay, LR_fin,
             batch_size, gpu_batches,
             n_epoch,
-            format, range_update_frequency, range_init_epoch,
             shuffle_batches, shuffle_examples):
         
         print '    Training algorithm:'
-        print '        Learning rate = %f' %(LR_start)
-        print '        Learning rate saturation = %i' %(LR_sat)
+        print '        Learning rate = %f' %(LR)
+        print '        Learning rate decay = %f' %(LR_decay)
         print '        Final learning rate = %f' %(LR_fin)
-        print '        Momentum = %f' %(M_start)
-        print '        Momentum saturation = %i' %(M_sat)
-        print '        Final momentum = %f' %(M_fin)
         print '        Batch size = %i' %(batch_size)
         print '        gpu_batches = %i' %(gpu_batches)
         print '        Number of epochs = %i' %(n_epoch)
         print '        shuffle_batches = %i' %(shuffle_batches)
         print '        shuffle_examples = %i' %(shuffle_examples)
-        print '        Format = '+ format
-        print '        Range update frequency = %i' %(range_update_frequency)
-        print '        Range init epochs = %i' %(range_init_epoch)
 
         # save the dataset
         self.rng = rng
         self.shuffle_batches = shuffle_batches
         self.shuffle_examples = shuffle_examples
-        self.load_path = load_path
-        self.save_path = save_path
         self.train_set = train_set
         self.valid_set = valid_set
         self.test_set = test_set
@@ -69,18 +60,13 @@ class Trainer(object):
         self.model = model
         
         # save the parameters
-        self.LR_start = LR_start
-        self.LR_sat = LR_sat
+        self.LR = LR
+        self.LR_decay = LR_decay
         self.LR_fin = LR_fin
-        self.M_start = M_start
-        self.M_sat = M_sat
-        self.M_fin = M_fin
         self.batch_size = batch_size
         self.gpu_batches = gpu_batches
         self.n_epoch = n_epoch
         self.format = format
-        self.range_update_frequency = range_update_frequency
-        self.range_init_epoch = range_init_epoch
         
         # put a part of the dataset on gpu
         self.shared_x = theano.shared(
@@ -101,35 +87,7 @@ class Trainer(object):
             set.X[i] = X[shuffled_index[i]]
             set.y[i] = y[shuffled_index[i]]
     
-    def init_range(self):
-        
-        # save the precisions and the random parameters of the model
-        comp_precision = self.model.get_comp_precision()
-        update_precision = self.model.get_update_precision()
-        self.model.save_params()
-        
-        # set a good precision 
-        self.model.set_comp_precision(31)
-        self.model.set_update_precision(31)
-        
-        # train n epochs to adjust the initial range
-        for k in range(self.range_init_epoch):
-            self.train_epoch(self.train_set)
-        
-        # set back the precision and the random parameters
-        self.model.set_comp_precision(comp_precision)
-        self.model.set_update_precision(update_precision)
-        self.model.load_params()
-    
     def init(self):
-        
-        if self.load_path != None:
-            self.model.load_params_file(self.load_path)
-
-        self.LR = self.LR_start
-        self.LR_step = (self.LR_fin-self.LR_start)/self.LR_sat 
-        self.M = self.M_start 
-        self.M_step = (self.M_fin-self.M_start)/self.M_sat 
         
         self.epoch = 0
         self.best_epoch = self.epoch
@@ -141,10 +99,12 @@ class Trainer(object):
         
         self.best_validation_ER = self.validation_ER
         self.best_test_ER = self.test_ER
-        
-        if self.format == "DFXP" : 
-            self.init_range()
- 
+    
+    def update_LR(self):
+
+        if self.LR > self.LR_fin:
+            self.LR *= self.LR_decay
+    
     def update(self):
         
         # start by shuffling train set
@@ -162,17 +122,14 @@ class Trainer(object):
         # test it on the test set
         self.test_ER = self.test_epoch(self.test_set) 
         
-        # update LR and M as well during the first phase
+        # update LR as well during the first phase
         self.update_LR()
-        self.update_M()
         
         # save the best parameters
         if self.validation_ER < self.best_validation_ER:
             self.best_validation_ER = self.validation_ER
             self.best_test_ER = self.test_ER
             self.best_epoch = self.epoch
-            if self.save_path != None:
-                self.model.save_params_file(self.save_path)
     
     def load_shared_dataset(self, set, start,size):
         
@@ -213,16 +170,9 @@ class Trainer(object):
             if self.shuffle_batches==True:
                 self.rng.shuffle(shuffled_range_j)
             
-            for j in shuffled_range_j: 
+            for j in shuffled_range_j:  
 
-                self.train_batch(j, self.LR, self.M)
-                
-                # update the dynamic ranges every range_update_frequency epoch
-                if self.format == "DFXP" : 
-                    k+=1
-                    if k==self.range_update_frequency:
-                        self.update_range(k)
-                        k=0
+                self.train_batch(j, self.LR)
         
         # load the last incomplete gpu batch of batches
         if n_remaining_batches > 0:
@@ -237,14 +187,7 @@ class Trainer(object):
             
             for j in shuffled_range_j: 
 
-                self.train_batch(j, self.LR, self.M)
-                
-                # update the dynamic ranges every range_update_frequency epoch
-                if self.format == "DFXP" : 
-                    k+=1
-                    if k==self.range_update_frequency:
-                        self.update_range(k)
-                        k=0
+                self.train_batch(j, self.LR)
     
     def test_epoch(self, set):
         
@@ -284,33 +227,16 @@ class Trainer(object):
         
         return error_rate
     
-    def update_LR(self):
-
-        if self.LR > self.LR_fin:
-            self.LR += self.LR_step
-        else:
-            self.LR = self.LR_fin
-    
-    def update_M(self):
-    
-        if self.M < self.M_fin: 
-            self.M += self.M_step
-        else:
-            self.M = self.M_fin
-    
     def monitor(self):
     
         print '    epoch %i:' %(self.epoch)
         print '        learning rate %f' %(self.LR)
-        print '        momentum %f' %(self.M)
         print '        validation error rate %f%%' %(self.validation_ER)
         print '        test error rate %f%%' %(self.test_ER)
         print '        epoch associated to best validation error %i' %(self.best_epoch)
         print '        best validation error rate %f%%' %(self.best_validation_ER)
         print '        test error rate associated to best validation error %f%%' %(self.best_test_ER)
-        
-        if self.format == "DFXP": 
-            self.model.print_range()
+        self.model.monitor()
     
     def train(self):        
         
@@ -330,12 +256,11 @@ class Trainer(object):
         index = T.lscalar() 
         batch_count = T.lscalar() 
         LR = T.scalar('LR', dtype=theano.config.floatX)
-        M = T.scalar('M', dtype=theano.config.floatX)
 
         # before the build, you work with symbolic variables
         # after the build, you work with numeric variables
         
-        self.train_batch = theano.function(inputs=[index,LR,M], updates=self.model.updates(x,y,LR,M),givens={ 
+        self.train_batch = theano.function(inputs=[index,LR], updates=self.model.updates(x,y,LR),givens={ 
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "train_batch", on_unused_input='warn')
@@ -344,6 +269,3 @@ class Trainer(object):
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "test_batch")
-                
-        if self.format == "DFXP" :  
-            self.update_range = theano.function(inputs=[batch_count],updates=self.model.range_updates(batch_count), name = "update_range")
