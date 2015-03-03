@@ -35,7 +35,7 @@ class Trainer(object):
             model,
             LR, LR_decay, LR_fin,
             batch_size, gpu_batches,
-            n_epoch,
+            n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
         
         print '    Training algorithm:'
@@ -45,6 +45,7 @@ class Trainer(object):
         print '        Batch size = %i' %(batch_size)
         print '        gpu_batches = %i' %(gpu_batches)
         print '        Number of epochs = %i' %(n_epoch)
+        print '        Monitor step = %i' %(monitor_step)
         print '        shuffle_batches = %i' %(shuffle_batches)
         print '        shuffle_examples = %i' %(shuffle_examples)
 
@@ -66,6 +67,7 @@ class Trainer(object):
         self.batch_size = batch_size
         self.gpu_batches = gpu_batches
         self.n_epoch = n_epoch
+        self.step = monitor_step
         self.format = format
         
         # put a part of the dataset on gpu
@@ -92,6 +94,8 @@ class Trainer(object):
         self.epoch = 0
         self.best_epoch = self.epoch
         
+        # test it on the training set
+        self.train_ER = self.test_epoch(self.train_set, can_fit=1)
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)
         # test it on the test set
@@ -103,7 +107,7 @@ class Trainer(object):
     def update_LR(self):
 
         if self.LR > self.LR_fin:
-            self.LR *= self.LR_decay
+            self.LR = self.LR * (self.LR_decay ** self.step)
     
     def update(self):
         
@@ -111,10 +115,14 @@ class Trainer(object):
         if self.shuffle_examples == True:
             self.shuffle(self.train_set)
         
-        self.epoch += 1
+        self.epoch += self.step
         
-        # train the model on all training examples
-        self.train_epoch(self.train_set)
+        for k in range(self.step):
+            # train the model on all training examples
+            self.train_epoch(self.train_set)
+        
+        # test it on the training set
+        self.train_ER = self.test_epoch(self.train_set, can_fit=1)
         
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)
@@ -189,40 +197,14 @@ class Trainer(object):
 
                 self.train_batch(j, self.LR)
     
-    def test_epoch(self, set):
+    def test_epoch(self, set, can_fit=0):
         
-        n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
-        n_gpu_batches = np.int(np.floor(n_batches/self.gpu_batches))
-        
-        if self.gpu_batches<=n_batches:
-            n_remaining_batches = n_batches%self.gpu_batches
-        else:
-            n_remaining_batches = n_batches
-        
-        error_rate = 0.
-        
-        for i in range(n_gpu_batches):
-        
-            self.load_shared_dataset(set,
-                start=i*self.gpu_batches,
-                size=self.gpu_batches)
-            
-            for j in range(self.gpu_batches): 
+        n_batches = 1
+        n_gpu_batches = 1
 
-                error_rate += self.test_batch(j)
-        
-        # load the last incomplete gpu batch of batches
-        if n_remaining_batches > 0:
-        
-            self.load_shared_dataset(set,
-                    start=n_gpu_batches*self.gpu_batches,
-                    size=n_remaining_batches)
-            
-            for j in range(n_remaining_batches): 
-
-                error_rate += self.test_batch(j)
-        
-        error_rate /= (n_batches*self.batch_size)
+        self.load_shared_dataset(set,start=0,size=set.X.shape[0])
+        error_rate = np.float(self.test_batch(can_fit))
+        error_rate /= set.X.shape[0]
         error_rate *= 100.
         
         return error_rate
@@ -231,6 +213,7 @@ class Trainer(object):
     
         print '    epoch %i:' %(self.epoch)
         print '        learning rate %f' %(self.LR)
+        print '        train error rate %f%%' %(self.train_ER)
         print '        validation error rate %f%%' %(self.validation_ER)
         print '        test error rate %f%%' %(self.test_ER)
         print '        epoch associated to best validation error %i' %(self.best_epoch)
@@ -254,18 +237,20 @@ class Trainer(object):
         x = T.matrix('x')
         y = T.matrix('y')
         index = T.lscalar() 
-        batch_count = T.lscalar() 
+        can_fit = T.lscalar() 
         LR = T.scalar('LR', dtype=theano.config.floatX)
 
         # before the build, you work with symbolic variables
         # after the build, you work with numeric variables
         
-        self.train_batch = theano.function(inputs=[index,LR], updates=self.model.updates(x,y,LR),givens={ 
+        self.train_batch = theano.function(inputs=[index,LR], updates=self.model.parameters_updates(x,y,LR),givens={ 
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "train_batch", on_unused_input='warn')
         
-        self.test_batch = theano.function(inputs=[index],outputs=self.model.errors(x,y),givens={
-                x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
-                y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
+        self.test_batch = theano.function(inputs = [can_fit], outputs=self.model.errors(x,y, can_fit),
+            updates=self.model.BN_updates(),
+            givens={
+                x: self.shared_x,
+                y: self.shared_y},
                 name = "test_batch")

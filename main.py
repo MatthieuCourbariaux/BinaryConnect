@@ -64,22 +64,18 @@ if __name__ == "__main__":
     print 'Loading the dataset' 
     
             
-    train_set = MNIST(which_set= 'train', binarize=True, start=0, stop = 50000)#, center = True)
-    valid_set = MNIST(which_set= 'train', binarize=True,start=50000, stop = 60000)#, center = True)
-    test_set = MNIST(which_set= 'test', binarize=True)#, center = True)
+    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
+    valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
+    test_set = MNIST(which_set= 'test', center = True)
     
     # for both datasets, onehot the target
     train_set.y = np.float32(onehot(train_set.y))
     valid_set.y = np.float32(onehot(valid_set.y))
     test_set.y = np.float32(onehot(test_set.y))
     
-    train_set.X = train_set.X-0.5
-    valid_set.X = valid_set.X-0.5
-    test_set.X = test_set.X-0.5
-    
-    train_set.y = train_set.y-0.5
-    valid_set.y = valid_set.y-0.5
-    test_set.y = test_set.y-0.5
+    train_set.y = 2* train_set.y - 1.
+    valid_set.y = 2* valid_set.y - 1.
+    test_set.y = 2* test_set.y - 1.
     
     # print train_set.X
     # print np.shape(train_set.X)
@@ -89,19 +85,20 @@ if __name__ == "__main__":
     print 'Creating the model'
 
     rng = np.random.RandomState(1234)
-    batch_size = 1000
-    LR = 200./batch_size
+    batch_size = 100
+    LR = .3
     gpu_batches = 50000/batch_size
-    n_epoch = 500
+    n_epoch = 300
+    monitor_step = 3
     
     model = PI_MNIST_model(rng = rng)
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
         model = model,
-        LR = LR, LR_decay = 0.995, LR_fin = LR/100.,
+        LR = LR, LR_decay = 0.98, LR_fin = LR/100.,
         batch_size = batch_size, gpu_batches = gpu_batches,
-        n_epoch = n_epoch,
+        n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = False, shuffle_examples = True)
 
     print 'Building'

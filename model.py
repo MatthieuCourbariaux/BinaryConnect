@@ -25,7 +25,7 @@ import theano
 import theano.tensor as T
 import time
 
-from layer import layer            
+from layer import layer, ReLU_layer            
         
         
 class network(object):
@@ -36,46 +36,65 @@ class network(object):
         
         self.n_hidden_layers = n_hidden_layer
     
-    def fprop(self, x):
+    def fprop(self, x, can_fit):
     
-        y = self.layer[0].fprop(x)
+        y = self.layer[0].fprop(x, can_fit)
         
         for k in range(1,self.n_hidden_layers+1):
-            y = self.layer[k].fprop(y)
+            y = self.layer[k].fprop(y, can_fit)
         
         return y
 
     # when you use fixed point, you cannot use T.grad directly -> bprop modifications.
     def bprop(self, y, t):
         
-        dEdy = y - t
+        batch_size = T.shape(y)[0]
+        
+        # MSE
+        # cost = T.sum(T.sqr(y-t))/batch_size
+        
+        # squared hinge loss
+        # cost = T.sum(T.sqr(T.maximum(0.,1.-t*y)))/batch_size
+        
+        # multi class squared hinge loss
+        cost = T.mean(T.sqr(T.maximum(0.,T.max(1.-t*y,axis=1))))
+        
+        # hinge loss
+        # cost = T.sum(T.maximum(0.,1.-t*y))/batch_size
         
         # bprop
         for k in range(self.n_hidden_layers,-1,-1):
-            dEdy = self.layer[k].bprop(dEdy)
+            self.layer[k].bprop(cost)
 
-            
-    # you give it the input and the target and it gives you the updates
-    def updates(self, x, t, LR):
+    def BN_updates(self):
         
-        y = self.fprop(x)        
-        self.bprop(y, t)
-        
-        # updates
-        updates = self.layer[0].updates(LR)
+        updates = self.layer[0].BN_updates()
         for k in range(1,self.n_hidden_layers+1):
-            updates = updates + self.layer[k].updates(LR)
+            updates = updates + self.layer[k].BN_updates()
         
         return updates
     
-    def errors(self, x, t):
+    # you give it the input and the target and it gives you the updates
+    def parameters_updates(self, x, t, LR):
         
-        y = self.fprop(x)
-        z = self.layer[self.n_hidden_layers].z
+        y = self.fprop(x, 1)        
+        self.bprop(y, t)
+        
+        # updates
+        updates = self.layer[0].parameters_updates(LR)
+        for k in range(1,self.n_hidden_layers+1):
+            updates = updates + self.layer[k].parameters_updates(LR)
+        
+        return updates
+    
+    def errors(self, x, t, can_fit):
+        
+        y = self.fprop(x, can_fit)
+        # z = self.layer[self.n_hidden_layers].z
         
         # error function
-        errors = T.sum(T.neq(T.argmax(z, axis=1), T.argmax(t, axis=1)))
-        # errors = T.sum(T.neq(T.argmax(y, axis=1), T.argmax(t, axis=1)))
+        # errors = T.sum(T.neq(T.argmax(z, axis=1), T.argmax(t, axis=1)))
+        errors = T.sum(T.neq(T.argmax(y, axis=1), T.argmax(t, axis=1)))
         
         return errors
         
@@ -91,9 +110,11 @@ class network(object):
             print "             Weights max = "+str(np.max(W))
             print "             Weights min = "+str(np.min(W)) 
             print "             Weights mean = "+str(np.mean(W)) 
+            print "             Weights mean abs = "+str(np.mean(np.abs(W))) 
             print "             Bias max = "+str(np.max(b)) 
             print "             Bias min = "+str(np.min(b)) 
             print "             Bias mean = "+str(np.mean(b))
+            print "             Bias mean abs = "+str(np.mean(np.abs(b)))
             # print "             Weights 1 max = "+str(np.max(W1))
             # print "             Weights 1 min = "+str(np.min(W1)) 
             # print "             Weights 1 mean = "+str(np.mean(W1)) 
@@ -105,10 +126,12 @@ class PI_MNIST_model(network):
 
     def __init__(self, rng):
         
-        # network.__init__(self, n_hidden_layer = 1) 
-        network.__init__(self, n_hidden_layer = 0)  
+        network.__init__(self, n_hidden_layer = 2) 
+        # network.__init__(self, n_hidden_layer = 0)  
 
-        # self.layer.append(layer(rng = rng, n_inputs = 784, n_units = 100))
-        # self.layer.append(layer(rng = rng, n_inputs = 100, n_units = 10))
-        self.layer.append(layer(rng = rng, n_inputs = 784, n_units = 10))
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 1000))
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 1000, n_units = 1000))
+        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 1000, n_units = 1000))
+        self.layer.append(layer(rng = rng, n_inputs = 1000, n_units = 10))
+        # self.layer.append(layer(rng = rng, n_inputs = 784, n_units = 10))
         
