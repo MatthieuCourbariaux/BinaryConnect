@@ -33,24 +33,25 @@ from pylearn2.sandbox.cuda_convnet.pool import MaxPool
         
 class layer(object):
     
-    def __init__(self, rng, n_inputs, n_units):
+    def __init__(self, rng, n_inputs, n_units, d):
         
         self.rng = rng
         
         self.n_units = n_units
         self.n_inputs = n_inputs
         # self.threshold = 0.1* n_inputs
+        self.d = d
 
-        # W_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX)-0.5
+        W_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX)-0.5
         # W1_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_units, n_inputs)),dtype=theano.config.floatX)-0.5
         # W1_values = W_values.T
         
-        # self.high=np.sqrt(6. / (n_inputs + n_units))
+        # self.high= np.sqrt(6. / (n_inputs + n_units))
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
-        high=np.sqrt(6. / (n_inputs + n_units))
-        low=-high
-        W_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
+        # high=np.sqrt(6. / (n_inputs + n_units))
+        # low=-high
+        # W_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
         
         # W1_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_units, n_inputs)),dtype=theano.config.floatX)
         
@@ -115,8 +116,9 @@ class layer(object):
         # LR_mask = T.cast(srng.binomial(n=1, p=LR, size=T.shape(self.W)), theano.config.floatX)
         # new_W = self.W + LR_mask * self.dEdW
         
-        # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW*LR,.00003) - T.ge(-self.dEdW*LR,.00003)),-.5,.5), theano.config.floatX)
-        new_W = self.W - LR * self.dEdW
+        new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW*LR,self.d) - T.ge(-self.dEdW*LR,self.d)),-.5,.5), theano.config.floatX)
+        # new_W = T.cast(T.clip(self.W - self.high*(T.ge(self.dEdW*LR,self.high/2.) - T.ge(-self.dEdW*LR,self.high/2.)),-self.high/2.,self.high/2.), theano.config.floatX)
+        # new_W = self.W - LR * self.dEdW
         
         new_b = self.b - LR * self.dEdb
         new_a = self.a - LR * self.dEda
@@ -134,10 +136,10 @@ class layer(object):
 
 class ReLU_layer(layer):
 
-    def __init__(self, rng, n_inputs, n_units):
+    def __init__(self, rng, n_inputs, n_units, d):
         
         # call mother class constructor
-        layer.__init__(self, rng, n_inputs, n_units)   
+        layer.__init__(self, rng, n_inputs, n_units, d)   
 
     def activation(self,z):
     

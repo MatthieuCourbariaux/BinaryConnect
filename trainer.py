@@ -107,7 +107,7 @@ class Trainer(object):
     def update_LR(self):
 
         if self.LR > self.LR_fin:
-            self.LR = self.LR * (self.LR_decay ** self.step)
+            self.LR *= self.LR_decay
     
     def update(self):
         
@@ -120,6 +120,9 @@ class Trainer(object):
         for k in range(self.step):
             # train the model on all training examples
             self.train_epoch(self.train_set)
+            
+            # update LR as well during the first phase
+            self.update_LR()
         
         # test it on the training set
         self.train_ER = self.test_epoch(self.train_set, can_fit=1)
@@ -130,8 +133,7 @@ class Trainer(object):
         # test it on the test set
         self.test_ER = self.test_epoch(self.test_set) 
         
-        # update LR as well during the first phase
-        self.update_LR()
+
         
         # save the best parameters
         if self.validation_ER < self.best_validation_ER:
@@ -226,7 +228,7 @@ class Trainer(object):
         self.init()
         self.monitor()
         
-        for epoch in range(self.n_epoch):
+        while (self.epoch < self.n_epoch):
             
             self.update()   
             self.monitor()
