@@ -36,12 +36,12 @@ class network(object):
         
         self.n_hidden_layers = n_hidden_layer
     
-    def fprop(self, x, can_fit):
+    def fprop(self, x, can_fit, binary):
     
-        y = self.layer[0].fprop(x, can_fit)
+        y = self.layer[0].fprop(x, can_fit, binary)
         
         for k in range(1,self.n_hidden_layers+1):
-            y = self.layer[k].fprop(y, can_fit)
+            y = self.layer[k].fprop(y, can_fit, binary)
         
         return y
 
@@ -77,7 +77,7 @@ class network(object):
     # you give it the input and the target and it gives you the updates
     def parameters_updates(self, x, t, LR):
         
-        y = self.fprop(x, 1)        
+        y = self.fprop(x, 1, binary=True)        
         self.bprop(y, t)
         
         # updates
@@ -89,7 +89,7 @@ class network(object):
     
     def errors(self, x, t, can_fit):
         
-        y = self.fprop(x, can_fit)
+        y = self.fprop(x, can_fit, binary=True)
         # z = self.layer[self.n_hidden_layers].z
         
         # error function
@@ -126,14 +126,18 @@ class PI_MNIST_model(network):
 
     def __init__(self, rng):
 
-        # network.__init__(self, n_hidden_layer = 2) 
-        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 2048, d = .000003))
-        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 2048, n_units = 2048, d = .000003))
-        # self.layer.append(layer(rng = rng, n_inputs = 2048, n_units = 10, d = .0001))
+        network.__init__(self, n_hidden_layer = 3) 
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 1024, d = .000003))
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
+        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 128, n_units = 128, d = .000003))
+        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 128, n_units = 128, d = .000003))
+        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 128, n_units = 128, d = .000003))
+        self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, d = .0001))
         
-        network.__init__(self, n_hidden_layer = 1) 
-        self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 100, d = .000003))
-        self.layer.append(layer(rng = rng, n_inputs = 100, n_units = 10, d = .0001))
+        # network.__init__(self, n_hidden_layer = 1) 
+        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 100, d = .000003))
+        # self.layer.append(layer(rng = rng, n_inputs = 100, n_units = 10, d = .0001))
         
         # network.__init__(self, n_hidden_layer = 0)  
         # self.layer.append(layer(rng = rng, n_inputs = 784, n_units = 10, d = .0001))

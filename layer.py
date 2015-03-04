@@ -42,16 +42,19 @@ class layer(object):
         # self.threshold = 0.1* n_inputs
         self.d = d
 
-        W_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX)-0.5
+        W_values = 2.* np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - 1.
+        # W_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX)-0.5
         # W1_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_units, n_inputs)),dtype=theano.config.floatX)-0.5
         # W1_values = W_values.T
         
         # self.high= np.sqrt(6. / (n_inputs + n_units))
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
-        # high=np.sqrt(6. / (n_inputs + n_units))
-        # low=-high
-        # W_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
+        high = np.float(np.sqrt(6. / (n_inputs + n_units)))
+        self.W_LR_scale = 1. / ((high/2.)**2.)
+        # print self.high
+
+        # W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
         
         # W1_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_units, n_inputs)),dtype=theano.config.floatX)
         
@@ -78,12 +81,24 @@ class layer(object):
     def activation(self, z):
         return z
     
-    def fprop(self, x, can_fit):
+    def fprop(self, x, can_fit, binary):
+        
+        if binary:
+            # self.W_prop = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
+            
+            # weights are either 1, either -1 -> propagating = sum and additions
+            self.W_prop = 2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
+            
+            # weights are either 1, either 0 -> propagating = sums
+            # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
+            
+        else: 
+            self.W_prop = self.W
         
         self.x = x
         
         # weighted sum
-        z = T.dot(self.x, self.W)
+        z = T.dot(self.x, self.W_prop)
         
         # batch normalization
         self.new_mean = T.switch(can_fit, T.mean(z,axis=0), self.mean)
@@ -108,7 +123,7 @@ class layer(object):
         
         self.dEdb = T.grad(cost=cost, wrt=self.b)
         self.dEda = T.grad(cost=cost, wrt=self.a)
-        self.dEdW = T.grad(cost=cost, wrt=self.W)
+        self.dEdW_prop = T.grad(cost=cost, wrt=self.W_prop)
         
     def parameters_updates(self, LR):    
         
@@ -122,11 +137,12 @@ class layer(object):
         # min = T.min(self.dEdW)
         # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,max) - T.ge(-self.dEdW,-min)),-.5,.5), theano.config.floatX)
         
-        max = T.max(abs(self.dEdW))
+        # max = T.max(abs(self.dEdW))
         # comp = (1.-2.*LR) * max
-        comp = T.exp(-5 * LR) * max
-        new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,comp) - T.ge(-self.dEdW,comp)),-.5,.5), theano.config.floatX)
+        # comp = T.exp(-5 * LR) * max
+        # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,comp) - T.ge(-self.dEdW,comp)),-.5,.5), theano.config.floatX)
         
+        new_W = self.W - self.W_LR_scale * LR * self.dEdW_prop
         # new_W = self.W - LR * self.dEdW
         
         new_b = self.b - LR * self.dEdb
