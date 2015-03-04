@@ -30,6 +30,8 @@ import scipy.stats
 from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
+
+from format import apply_format
         
 class layer(object):
     
@@ -83,17 +85,13 @@ class layer(object):
     
     def fprop(self, x, can_fit, binary):
         
-        if binary:
-            # self.W_prop = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
-            
-            # weights are either 1, either -1 -> propagating = sum and additions
-            self.W_prop = 2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
-            
-            # weights are either 1, either 0 -> propagating = sums
-            # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
-            
-        else: 
-            self.W_prop = self.W
+        # self.W_prop = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
+        
+        # weights are either 1, either -1 -> propagating = sum and additions
+        self.W_prop = 2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
+        
+        # weights are either 1, either 0 -> propagating = sums
+        # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
         
         self.x = x
         
@@ -143,6 +141,11 @@ class layer(object):
         # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,comp) - T.ge(-self.dEdW,comp)),-.5,.5), theano.config.floatX)
         
         new_W = self.W - self.W_LR_scale * LR * self.dEdW_prop
+        
+        # 8 bits representation with 1 bit of sign, -2 bits for integer part, and 7 bits for fraction
+        # round to nearest -> try stochastic rounding ?
+        new_W = apply_format("FXP", new_W, 7, -2) 
+        
         # new_W = self.W - LR * self.dEdW
         
         new_b = self.b - LR * self.dEdb

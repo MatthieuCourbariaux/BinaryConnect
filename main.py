@@ -88,7 +88,7 @@ if __name__ == "__main__":
     batch_size = 1000
     LR = .3
     gpu_batches = 50000/batch_size
-    n_epoch = 500
+    n_epoch = 300
     monitor_step = 10
     
     model = PI_MNIST_model(rng = rng)
