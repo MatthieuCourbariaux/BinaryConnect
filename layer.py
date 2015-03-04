@@ -116,8 +116,17 @@ class layer(object):
         # LR_mask = T.cast(srng.binomial(n=1, p=LR, size=T.shape(self.W)), theano.config.floatX)
         # new_W = self.W + LR_mask * self.dEdW
         
-        new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW*LR,self.d) - T.ge(-self.dEdW*LR,self.d)),-.5,.5), theano.config.floatX)
-        # new_W = T.cast(T.clip(self.W - self.high*(T.ge(self.dEdW*LR,self.high/2.) - T.ge(-self.dEdW*LR,self.high/2.)),-self.high/2.,self.high/2.), theano.config.floatX)
+        # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW*LR,self.d) - T.ge(-self.dEdW*LR,self.d)),-.5,.5), theano.config.floatX)
+        
+        # max = T.max(self.dEdW)
+        # min = T.min(self.dEdW)
+        # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,max) - T.ge(-self.dEdW,-min)),-.5,.5), theano.config.floatX)
+        
+        max = T.max(abs(self.dEdW))
+        # comp = (1.-2.*LR) * max
+        comp = T.exp(-5 * LR) * max
+        new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,comp) - T.ge(-self.dEdW,comp)),-.5,.5), theano.config.floatX)
+        
         # new_W = self.W - LR * self.dEdW
         
         new_b = self.b - LR * self.dEdb
