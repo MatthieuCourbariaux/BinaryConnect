@@ -55,7 +55,7 @@ class layer(object):
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
         high = np.float(np.sqrt(6. / (n_inputs + n_units)))
-        self.W_LR_scale = 1. / ((high/2.)**2.)
+        self.W_scale = high/2.
         # print self.high
 
         # W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
@@ -90,13 +90,14 @@ class layer(object):
         # self.W_prop = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
         
         # weights are either 1, either -1 -> propagating = sum and sub
-        self.W_prop = 2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
+        # And scaling down weights to normal values
+        self.W_prop = self.W_scale * (2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.)
         
         # weights are either 1, either -1, either 0 -> propagating = sum and sub
-        # results are not better, maybe worse (it requires more bits for integer par of fxp)
+        # results are not better, maybe worse (it requires more bits for integer part of fxp)
         # self.W_prop = T.cast(T.ge(self.W,.5)-T.le(self.W,-.5), theano.config.floatX)
         
-        2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
+        # 2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
         
         # weights are either 1, either 0 -> propagating = sums
         # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
@@ -120,7 +121,7 @@ class layer(object):
     def BN_updates(self):
         
         updates = []
-        updates.append((self.mean, self.new_mean))
+        updates.append((self.mean, self.new_mean)) 
         updates.append((self.var, self.new_var))
         
         return updates
@@ -148,7 +149,8 @@ class layer(object):
         # comp = T.exp(-5 * LR) * max
         # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,comp) - T.ge(-self.dEdW,comp)),-.5,.5), theano.config.floatX)
         
-        new_W = self.W - self.W_LR_scale * LR * self.dEdW_prop
+        # updating and scaling up gradient to 0 and ones
+        new_W = self.W - LR * self.dEdW_prop / self.W_scale
         
         # 8 bits representation with 1 bit of sign, -2 bits for integer part, and 7 bits for fraction
         # round to nearest -> try stochastic rounding ?

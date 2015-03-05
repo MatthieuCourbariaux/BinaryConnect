@@ -126,16 +126,16 @@ class PI_MNIST_model(network):
 
     def __init__(self, rng):
 
-        # network.__init__(self, n_hidden_layer = 3) 
-        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 1024, d = .000003))
-        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
-        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
-        # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, d = .0001))
+        network.__init__(self, n_hidden_layer = 3) 
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 1024, d = .000003))
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
+        self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
+        self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, d = .0001))
         
         # network.__init__(self, n_hidden_layer = 1) 
         # self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 100, d = .000003))
         # self.layer.append(layer(rng = rng, n_inputs = 100, n_units = 10, d = .0001))
         
-        network.__init__(self, n_hidden_layer = 0)  
-        self.layer.append(layer(rng = rng, n_inputs = 784, n_units = 10, d = .0001))
+        # network.__init__(self, n_hidden_layer = 0)  
+        # self.layer.append(layer(rng = rng, n_inputs = 784, n_units = 10, d = .0001))
         

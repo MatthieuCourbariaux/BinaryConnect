@@ -255,4 +255,4 @@ class Trainer(object):
             givens={
                 x: self.shared_x,
                 y: self.shared_y},
-                name = "test_batch")
+                name = "test_batch", on_unused_input='warn')
