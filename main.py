@@ -85,10 +85,10 @@ if __name__ == "__main__":
     print 'Creating the model'
 
     rng = np.random.RandomState(1234)
-    batch_size = 1000
+    batch_size = 100
     LR = .3
     gpu_batches = 50000/batch_size
-    n_epoch = 300
+    n_epoch = 1000
     monitor_step = 10
     
     model = PI_MNIST_model(rng = rng)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
         model = model,
-        LR = LR, LR_decay = 0.99, LR_fin = LR/10000.,
+        LR = LR, LR_decay = 0.995, LR_fin = LR/10000.,
         batch_size = batch_size, gpu_batches = gpu_batches,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = False, shuffle_examples = True)

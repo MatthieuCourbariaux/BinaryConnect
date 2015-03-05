@@ -111,7 +111,8 @@ class layer(object):
         self.new_mean = T.switch(can_fit, T.mean(z,axis=0), self.mean)
         self.new_var = T.switch(can_fit, T.var(z,axis=0), self.var)
         z = (z - self.new_mean)/(T.sqrt(self.new_var+1e-9))
-        z = self.a * z + self.b
+        z = self.a * z
+        z = z + self.b
         
         # activation function
         y = self.activation(z)
