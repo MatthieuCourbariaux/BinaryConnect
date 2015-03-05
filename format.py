@@ -60,7 +60,7 @@ def fixed_point(X,NOB, NOIB):
     power = T.cast(2.**(NOB - NOIB), theano.config.floatX) # float !
     max = T.cast((2.**NOB)-1, theano.config.floatX)
     value = X*power    
-    value = T.round(value) # rounding
+    value = T.round(value) # nearest rounding
     value = T.clip(value, -max, max) # saturation arithmetic
     value = value/power
     return value

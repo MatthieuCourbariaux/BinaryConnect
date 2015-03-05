@@ -45,6 +45,8 @@ class layer(object):
         self.d = d
 
         W_values = 2.* np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - 1.
+        # W_values = np.asarray(self.rng.binomial(n=1, p=.33, size=(n_inputs, n_units)),dtype=theano.config.floatX) - np.asarray(self.rng.binomial(n=1, p=.33, size=(n_inputs, n_units)),dtype=theano.config.floatX)
+        
         # W_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX)-0.5
         # W1_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_units, n_inputs)),dtype=theano.config.floatX)-0.5
         # W1_values = W_values.T
@@ -87,8 +89,14 @@ class layer(object):
         
         # self.W_prop = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
         
-        # weights are either 1, either -1 -> propagating = sum and additions
+        # weights are either 1, either -1 -> propagating = sum and sub
         self.W_prop = 2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
+        
+        # weights are either 1, either -1, either 0 -> propagating = sum and sub
+        # results are not better, maybe worse (it requires more bits for integer par of fxp)
+        # self.W_prop = T.cast(T.ge(self.W,.5)-T.le(self.W,-.5), theano.config.floatX)
+        
+        2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
         
         # weights are either 1, either 0 -> propagating = sums
         # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
@@ -144,7 +152,7 @@ class layer(object):
         
         # 8 bits representation with 1 bit of sign, -2 bits for integer part, and 7 bits for fraction
         # round to nearest -> try stochastic rounding ?
-        new_W = apply_format("FXP", new_W, 7, -2) 
+        new_W = apply_format("FXP", new_W, 7, -2)
         
         # new_W = self.W - LR * self.dEdW
         

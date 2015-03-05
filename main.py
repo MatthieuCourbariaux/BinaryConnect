@@ -89,7 +89,7 @@ if __name__ == "__main__":
     LR = .3
     gpu_batches = 50000/batch_size
     n_epoch = 300
-    monitor_step = 10
+    monitor_step = 30
     
     model = PI_MNIST_model(rng = rng)
     
@@ -111,9 +111,8 @@ if __name__ == "__main__":
     
     print 'Display weights'
     
-    W = np.transpose(model.layer[0].W.get_value())
-    print np.max((W==0.))
-    W = tile_raster_images(W,(28,28),(10,10),(2, 2))
+    W = 2.* (np.transpose(model.layer[0].W.get_value())>=0.) - 1.
+    W = tile_raster_images(W,(28,28),(2,5),(2, 2))
     plt.imshow(W, cmap = cm.Greys_r)
     plt.show()
 
