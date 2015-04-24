@@ -23,12 +23,9 @@ import os.path
 import sys
 import theano 
 import theano.tensor as T
-import time
-
-from layer import layer, ReLU_layer            
+import time       
         
-        
-class network(object):
+class Network(object):
     
     layer = []                
     
@@ -54,10 +51,10 @@ class network(object):
         # cost = T.sum(T.sqr(y-t))/batch_size
         
         # squared hinge loss
-        # cost = T.sum(T.sqr(T.maximum(0.,1.-t*y)))/batch_size
+        cost = T.sum(T.sqr(T.maximum(0.,1.-t*y)))/batch_size
         
         # multi class squared hinge loss
-        cost = T.mean(T.sqr(T.maximum(0.,T.max(1.-t*y,axis=1))))
+        # cost = T.mean(T.sqr(T.maximum(0.,T.max(1.-t*y,axis=1))))
         
         # hinge loss
         # cost = T.sum(T.maximum(0.,1.-t*y))/batch_size
@@ -106,36 +103,16 @@ class network(object):
             # W1 = self.layer[k].W1.get_value()
             b = self.layer[k].b.get_value()
             # b1 = self.layer[k].b1.get_value()
-            print "         Layer "+str(k)+":"
-            print "             Weights max = "+str(np.max(W))
-            print "             Weights min = "+str(np.min(W)) 
-            print "             Weights mean = "+str(np.mean(W)) 
-            print "             Weights mean abs = "+str(np.mean(np.abs(W))) 
-            print "             Bias max = "+str(np.max(b)) 
-            print "             Bias min = "+str(np.min(b)) 
-            print "             Bias mean = "+str(np.mean(b))
-            print "             Bias mean abs = "+str(np.mean(np.abs(b)))
+
+            # print "        layer "+str(k)+" weights max abs = "+str(np.max(np.abs(W)))   
+            print "        layer "+str(k)+" weights mean abs = "+str(np.mean(np.abs(W)))   
+            
+            # print "         Layer "+str(k)+":"
+            # print "             Weights abs max = "+str(np.max(np.abs(W)))
             # print "             Weights 1 max = "+str(np.max(W1))
             # print "             Weights 1 min = "+str(np.min(W1)) 
             # print "             Weights 1 mean = "+str(np.mean(W1)) 
             # print "             Bias max 1 = "+str(np.max(b1)) 
             # print "             Bias min 1 = "+str(np.min(b1)) 
             # print "             Bias mean 1 = "+str(np.mean(b1))
-    
-class PI_MNIST_model(network):
-
-    def __init__(self, rng):
-
-        network.__init__(self, n_hidden_layer = 3) 
-        self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 1024, d = .000003))
-        self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
-        self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024, d = .000003))
-        self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, d = .0001))
-        
-        # network.__init__(self, n_hidden_layer = 1) 
-        # self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 100, d = .000003))
-        # self.layer.append(layer(rng = rng, n_inputs = 100, n_units = 10, d = .0001))
-        
-        # network.__init__(self, n_hidden_layer = 0)  
-        # self.layer.append(layer(rng = rng, n_inputs = 784, n_units = 10, d = .0001))
         

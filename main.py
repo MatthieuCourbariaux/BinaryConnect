@@ -24,7 +24,8 @@ import sys
 import time
 
 from trainer import Trainer
-from model import PI_MNIST_model
+from model import Network
+from layer import layer, ReLU_layer    
 
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
@@ -51,19 +52,10 @@ def onehot(x,numclasses=None):
        
 # MAIN
 
-# stochastic learning rate works with continuous weights
-# multilayer does not work so far 
-# discrete weights + continuous bias do work for one layer
-# batch and activations -> only update the most wrong weight
-
 if __name__ == "__main__":
-       
-    print 'Beginning of the program'
-    start_time = time.clock()   
-    
+          
     print 'Loading the dataset' 
     
-            
     train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
     test_set = MNIST(which_set= 'test', center = True)
@@ -83,20 +75,34 @@ if __name__ == "__main__":
     # print np.min(train_set.X)
         
     print 'Creating the model'
+    
+    class PI_MNIST_model(Network):
+
+        def __init__(self, rng):
+
+            Network.__init__(self, n_hidden_layer = 3) 
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 1024))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024))
+            # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10))
+            self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = .15))
+            # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = 1000))
 
     rng = np.random.RandomState(1234)
+    model = PI_MNIST_model(rng = rng)
+    
+    print 'Creating the trainer'
+    
     batch_size = 100
-    LR = .3
+    LR = .03
     gpu_batches = 50000/batch_size
     n_epoch = 1000
     monitor_step = 10
     
-    model = PI_MNIST_model(rng = rng)
-    
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
         model = model,
-        LR = LR, LR_decay = 0.995, LR_fin = LR/10000.,
+        LR = LR, LR_decay = 0.999, LR_fin = LR/10000.,
         batch_size = batch_size, gpu_batches = gpu_batches,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = False, shuffle_examples = True)
@@ -107,7 +113,10 @@ if __name__ == "__main__":
     
     print 'Training'
     
+    start_time = time.clock()  
     trainer.train()
+    end_time = time.clock()
+    print 'The training took %i seconds'%(end_time - start_time)
     
     print 'Display weights'
     
@@ -115,7 +124,3 @@ if __name__ == "__main__":
     W = tile_raster_images(W,(28,28),(5,5),(2, 2))
     plt.imshow(W, cmap = cm.Greys_r)
     plt.show()
-
-    end_time = time.clock()
-    print 'The code ran for %i seconds'%(end_time - start_time)
-    

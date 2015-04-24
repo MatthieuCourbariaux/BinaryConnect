@@ -25,8 +25,33 @@ import theano
 import theano.tensor as T
 import time
 
-from theano.scalar.basic import UnaryScalarOp, same_out_nocomplex
+# For the Discretization
+from theano.scalar.basic import UnaryScalarOp, BinaryScalarOp, upcast_out, same_out_nocomplex
 from theano.tensor.elemwise import Elemwise
+
+# The only reason I am implementing my own op is for the identity gradient
+class Discretize(BinaryScalarOp):
+    
+    # Is bprop discrete ?
+    # z = W_d * x
+    # According to the chain rule, 
+    # Bprop is discrete for the inputs gradient:
+    # dEdx = dEdz * dzdx = dEdz * W_d
+    # However, it is not for the parameters gradient:
+    # dEdw = dEdz * dzd(W_d) * d(W_d)dW 
+    # The last term is identity, so:
+    # dEdw = dEdz * dzd((W_d)) = dEdz * x
+
+    # did one experiment to check:
+    # multiply both W_lr_scale and W initialization by 10 -> no change on the results :)
+    
+    def c_code(self, node, name, (x, y), (z, ), sub):
+        return "%(z)s = %(y)s * (2*(%(x)s >= 0)-1);" % locals()
+
+    def grad(self, (x, y), (gz, )):
+        return gz, y.zeros_like().astype(theano.config.floatX)
+
+discretize = Elemwise(Discretize(upcast_out, name='discretize'))
 
 def apply_format(format, X, NOB, NOIB):
     

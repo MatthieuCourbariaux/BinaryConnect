@@ -31,20 +31,21 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from format import apply_format
-        
+from format import discretize
+  
 class layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, d):
+    def __init__(self, rng, n_inputs, n_units, W_lr_scale=1.):
         
         self.rng = rng
         
         self.n_units = n_units
         self.n_inputs = n_inputs
+        self.W_lr_scale = W_lr_scale
+        
         # self.threshold = 0.1* n_inputs
-        self.d = d
-
-        W_values = 2.* np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - 1.
+        
+        # W_values = 2.* np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - 1.
         # W_values = np.asarray(self.rng.binomial(n=1, p=.33, size=(n_inputs, n_units)),dtype=theano.config.floatX) - np.asarray(self.rng.binomial(n=1, p=.33, size=(n_inputs, n_units)),dtype=theano.config.floatX)
         
         # W_values = np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX)-0.5
@@ -54,15 +55,13 @@ class layer(object):
         # self.high= np.sqrt(6. / (n_inputs + n_units))
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
-        high = np.float(np.sqrt(6. / (n_inputs + n_units)))
-        self.W_scale = high/2.
+        self.high = np.float(np.sqrt(6. / (n_inputs + n_units)))
+        self.W_scale = self.high/2.
         # print self.high
-
-        # W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
         
         # W1_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_units, n_inputs)),dtype=theano.config.floatX)
         
-        # W_values = np.zeros((n_inputs, n_units),dtype=theano.config.floatX)
+        W_values = np.zeros((n_inputs, n_units),dtype=theano.config.floatX)
         # W1_values = np.zeros((n_units, n_inputs),dtype=theano.config.floatX)
 
         # b_values = np.zeros((n_units), dtype=theano.config.floatX) - n_units/2. # to have 1/2 neurons firing
@@ -91,7 +90,8 @@ class layer(object):
         
         # weights are either 1, either -1 -> propagating = sum and sub
         # And scaling down weights to normal values
-        self.W_prop = self.W_scale * (2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.)
+        # self.W_prop = self.W_scale * (2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.)
+        # self.W_prop = self.W_scale * discretize(self.W)
         
         # weights are either 1, either -1, either 0 -> propagating = sum and sub
         # results are not better, maybe worse (it requires more bits for integer part of fxp)
@@ -105,13 +105,16 @@ class layer(object):
         self.x = x
         
         # weighted sum
-        z = T.dot(self.x, self.W_prop)
+        # z = T.dot(self.x, self.W_prop)
+        
+        # I scale z instead of W because this way the dot product is an accumulation
+        z =  T.dot(self.x, discretize(self.W,self.W_scale))
         
         # batch normalization
         self.new_mean = T.switch(can_fit, T.mean(z,axis=0), self.mean)
         self.new_var = T.switch(can_fit, T.var(z,axis=0), self.var)
-        z = (z - self.new_mean)/(T.sqrt(self.new_var+1e-9))
-        z = self.a * z
+        # z = (z - self.new_mean)/(T.sqrt(self.new_var+1e-9))
+        # z = self.a * z
         z = z + self.b
         
         # activation function
@@ -130,8 +133,10 @@ class layer(object):
     def bprop(self, cost):
         
         self.dEdb = T.grad(cost=cost, wrt=self.b)
-        self.dEda = T.grad(cost=cost, wrt=self.a)
-        self.dEdW_prop = T.grad(cost=cost, wrt=self.W_prop)
+        # self.dEda = T.grad(cost=cost, wrt=self.a)
+        self.dEda = 0
+        # self.dEdW_prop = T.grad(cost=cost, wrt=self.W_prop)
+        self.dEdW = T.grad(cost=cost, wrt=self.W)
         
     def parameters_updates(self, LR):    
         
@@ -151,15 +156,21 @@ class layer(object):
         # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,comp) - T.ge(-self.dEdW,comp)),-.5,.5), theano.config.floatX)
         
         # updating and scaling up gradient to 0 and ones
-        new_W = self.W - LR * self.dEdW_prop / self.W_scale
+        # new_W = self.W - LR * self.dEdW_prop / self.W_scale
+        # new_W = self.W - LR / (self.W_scale ** 2) * self.dEdW 
+        # new_W = self.W - LR / self.W_scale * self.dEdW 
+        new_W = self.W - LR * self.W_lr_scale * self.dEdW 
         
         # 8 bits representation with 1 bit of sign, -2 bits for integer part, and 7 bits for fraction
         # round to nearest -> try stochastic rounding ?
-        new_W = apply_format("FXP", new_W, 7, -2)
+        # new_W = apply_format("FXP", new_W, 4, -4)
+        
+        # Try saturation and no fixed point...
         
         # new_W = self.W - LR * self.dEdW
         
         new_b = self.b - LR * self.dEdb
+        # new_b = self.b - LR * self.dEdb/100
         new_a = self.a - LR * self.dEda
         # new_b1 = self.b1 - LR * self.dEdb1
 
@@ -175,14 +186,23 @@ class layer(object):
 
 class ReLU_layer(layer):
 
-    def __init__(self, rng, n_inputs, n_units, d):
+    def __init__(self, rng, n_inputs, n_units, W_lr_scale=1.):
         
         # call mother class constructor
-        layer.__init__(self, rng, n_inputs, n_units, d)   
-
+        layer.__init__(self, rng, n_inputs, n_units, W_lr_scale)   
+        
+        W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
+        self.W = theano.shared(value=W_values, name='W')
+        
     def activation(self,z):
     
-        # return T.maximum(0.,z)
-        return T.maximum(z/3.,z)
+        return T.maximum(0.,z)
+        # return T.maximum(z/3.,z)
+        # return T.maximum(z/10.,z)
+        # return T.maximum(z/100.,z)
+        
+        # Roland activation function
+        # return T.ge(z,1.)*z
+        
         # return z
         

@@ -38,16 +38,15 @@ class Trainer(object):
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
         
-        print '    Training algorithm:'
-        print '        Learning rate = %f' %(LR)
-        print '        Learning rate decay = %f' %(LR_decay)
-        print '        Final learning rate = %f' %(LR_fin)
-        print '        Batch size = %i' %(batch_size)
-        print '        gpu_batches = %i' %(gpu_batches)
-        print '        Number of epochs = %i' %(n_epoch)
-        print '        Monitor step = %i' %(monitor_step)
-        print '        shuffle_batches = %i' %(shuffle_batches)
-        print '        shuffle_examples = %i' %(shuffle_examples)
+        print '    Learning rate = %f' %(LR)
+        print '    Learning rate decay = %f' %(LR_decay)
+        print '    Final learning rate = %f' %(LR_fin)
+        print '    Batch size = %i' %(batch_size)
+        print '    gpu_batches = %i' %(gpu_batches)
+        print '    Number of epochs = %i' %(n_epoch)
+        print '    Monitor step = %i' %(monitor_step)
+        print '    shuffle_batches = %i' %(shuffle_batches)
+        print '    shuffle_examples = %i' %(shuffle_examples)
 
         # save the dataset
         self.rng = rng
