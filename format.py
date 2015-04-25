@@ -33,6 +33,8 @@ from theano.tensor.elemwise import Elemwise
 class Discretize(BinaryScalarOp):
     
     # Is bprop discrete ?
+    
+    # In theory yes:
     # z = W_d * x
     # According to the chain rule, 
     # Bprop is discrete for the inputs gradient:
@@ -42,8 +44,9 @@ class Discretize(BinaryScalarOp):
     # The last term is identity, so:
     # dEdw = dEdz * dzd((W_d)) = dEdz * x
 
-    # did one experiment to check:
-    # multiply both W_lr_scale and W initialization by 10 -> no change on the results :)
+    # did experiments to check:
+    # multiply both W_lr_scale and W initialization by 10 -> no change on the results
+    # manual gradient instead of T.grad -> same results
     
     def c_code(self, node, name, (x, y), (z, ), sub):
         return "%(z)s = %(y)s * (2*(%(x)s >= 0)-1);" % locals()
@@ -52,17 +55,6 @@ class Discretize(BinaryScalarOp):
         return gz, y.zeros_like().astype(theano.config.floatX)
 
 discretize = Elemwise(Discretize(upcast_out, name='discretize'))
-
-def apply_format(format, X, NOB, NOIB):
-    
-    if format == "FXP" or format == "DFXP": 
-        return fixed_point(X,NOB, NOIB)
-        
-    elif format == "FLP":
-        return X
-        
-    elif format == "HFLP":
-        return float16(X)     
 
 # float16 function
 # we are using the nvidia cuda function (only works on GPU)
@@ -75,40 +67,41 @@ class Float16(UnaryScalarOp):
         return "%(z)s = __half2float(__float2half_rn(%(x)s));" % locals()  
 float16_scalar = Float16(same_out_nocomplex, name='float16')
 float16 = Elemwise(float16_scalar)
-        
+
+def stochastic_rounding(x, rng):
+    
+    p = x-T.floor(x)
+    
+    srng = T.shared_randomstreams.RandomStreams(rng.randint(999999))
+    p_mask = T.cast(srng.binomial(n=1, p=p, size=T.shape(x)), theano.config.floatX)
+    
+    x = T.floor(x) + p_mask
+    
+    return x
+    
 # this function simulate the precision and the range of a fixed point 
 # while working with floats
 # NOB = Number Of Bits = bit-width
 # NOIB = Number Of Integer Bits = position of the radix point = range
-def fixed_point(X,NOB, NOIB):
+def fixed_point(X,NOB, NOIB, saturation=True, stochastic=False, rng=None):
     
     power = T.cast(2.**(NOB - NOIB), theano.config.floatX) # float !
     max = T.cast((2.**NOB)-1, theano.config.floatX)
-    value = X*power    
-    value = T.round(value) # nearest rounding
-    value = T.clip(value, -max, max) # saturation arithmetic
+    value = X*power 
+    
+    if stochastic == True:
+        value = stochastic_rounding(value, rng)
+    
+    else:
+        value = T.round(value) # round to nearest
+    
+    if saturation == True:
+        value = T.clip(value, -max, max) # saturation arithmetic
+    
+    else:
+        # TODO http://en.wikipedia.org/wiki/Modular_arithmetic
+        raise NotImplementedError("Modular arithmetic not implemented yet")
+    
     value = value/power
     return value
-        
-# compute the new range of the dynamic fixed point representation
-def new_range(overflow, overflow_1, max_overflow):
-    
-    # the goal is to update the range of the vector 
-    # we know the overflow rates associated with range (overflow) 
-    # and range-1 (overflow_1)
-    # if (overflow > max_overflow): increment range
-    # else if (overflow_1 < max_overflow): decrement range
-    return T.switch(T.gt(overflow, max_overflow), 1, 
-        T.switch(T.gt(overflow_1, max_overflow), 0, - 1))
-
-# Overflow rate of a vector knowing its NOIB and NOB
-def overflow(vector, NOB, NOIB):
-    
-    # compute the max value of the fixed point representation (i.e. the overflow value)
-    max = ((2.**NOB)-1)/(2.**(NOB - NOIB))
-    
-    # compute the overflow rate of the vector
-    overflow = T.mean(T.switch(T.ge(T.abs_(vector), max), 1., 0.))
-    
-    return overflow
     

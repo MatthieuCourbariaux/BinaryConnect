@@ -76,19 +76,25 @@ if __name__ == "__main__":
         
     print 'Creating the model'
     
+    rng = np.random.RandomState(1234)
+    
     class PI_MNIST_model(Network):
 
         def __init__(self, rng):
-
+            
+            saturation = 2**-8
+            # saturation = None
+            discrete = True
+            n_units = 128
+            
             Network.__init__(self, n_hidden_layer = 3) 
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = 1024))
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024))
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 1024, n_units = 1024))
-            # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10))
-            self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = .15))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, discrete=discrete, saturation=saturation))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, discrete=discrete, saturation=saturation))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, discrete=discrete, saturation=saturation))
+            self.layer.append(layer(rng = rng, n_inputs = n_units, n_units = 10, discrete=discrete, saturation=saturation))
+            # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = .15))
             # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = 1000))
-
-    rng = np.random.RandomState(1234)
+    
     model = PI_MNIST_model(rng = rng)
     
     print 'Creating the trainer'

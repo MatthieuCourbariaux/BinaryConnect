@@ -31,17 +31,25 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from format import discretize
+from format import discretize, fixed_point
   
 class layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, W_lr_scale=1.):
+    def __init__(self, rng, n_inputs, n_units, discrete=False, W_lr_scale=1., saturation=None):
         
         self.rng = rng
         
         self.n_units = n_units
         self.n_inputs = n_inputs
+        self.discrete = discrete
         self.W_lr_scale = W_lr_scale
+        self.saturation = saturation
+
+        print "    n_units = "+str(n_units)
+        print "    n_inputs = "+str(n_inputs)
+        print "    discrete = "+str(discrete)
+        print "    W_lr_scale = "+str(W_lr_scale)
+        print "    saturation = "+str(saturation)
         
         # self.threshold = 0.1* n_inputs
         
@@ -56,12 +64,12 @@ class layer(object):
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
         self.high = np.float(np.sqrt(6. / (n_inputs + n_units)))
-        self.W_scale = self.high/2.
         # print self.high
         
-        # W1_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_units, n_inputs)),dtype=theano.config.floatX)
+        W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
+        # W_values = np.zeros((n_inputs, n_units),dtype=theano.config.floatX)
         
-        W_values = np.zeros((n_inputs, n_units),dtype=theano.config.floatX)
+        # W1_values = np.asarray(self.rng.uniform(low=low,high=high,size=(n_units, n_inputs)),dtype=theano.config.floatX)
         # W1_values = np.zeros((n_units, n_inputs),dtype=theano.config.floatX)
 
         # b_values = np.zeros((n_units), dtype=theano.config.floatX) - n_units/2. # to have 1/2 neurons firing
@@ -107,8 +115,18 @@ class layer(object):
         # weighted sum
         # z = T.dot(self.x, self.W_prop)
         
-        # I scale z instead of W because this way the dot product is an accumulation
-        z =  T.dot(self.x, discretize(self.W,self.W_scale))
+
+        
+        # discrete weights
+        # I could scale x or z instead of W 
+        # and the dot product would become an accumulation
+        # I am not doing it because it would mess up with Theano automatic differentiation.
+        if self.discrete == True:
+            z =  T.dot(self.x, discretize(self.W,self.high/2.))
+            
+        # continuous weights
+        else:
+            z =  T.dot(self.x, self.W)        
         
         # batch normalization
         self.new_mean = T.switch(can_fit, T.mean(z,axis=0), self.mean)
@@ -159,7 +177,12 @@ class layer(object):
         # new_W = self.W - LR * self.dEdW_prop / self.W_scale
         # new_W = self.W - LR / (self.W_scale ** 2) * self.dEdW 
         # new_W = self.W - LR / self.W_scale * self.dEdW 
+        
         new_W = self.W - LR * self.W_lr_scale * self.dEdW 
+        
+        if self.saturation is not None:
+            new_W = T.clip(new_W,-self.saturation,self.saturation)
+            # new_W = fixed_point(X=new_W,NOB=7,NOIB=-8,saturation=True,stochastic=True , rng=self.rng)
         
         # 8 bits representation with 1 bit of sign, -2 bits for integer part, and 7 bits for fraction
         # round to nearest -> try stochastic rounding ?
@@ -186,13 +209,13 @@ class layer(object):
 
 class ReLU_layer(layer):
 
-    def __init__(self, rng, n_inputs, n_units, W_lr_scale=1.):
+    # def __init__(self, **kwargs):
         
         # call mother class constructor
-        layer.__init__(self, rng, n_inputs, n_units, W_lr_scale)   
+        # layer.__init__(self, **kwargs)   
         
-        W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
-        self.W = theano.shared(value=W_values, name='W')
+        # W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
+        # self.W = theano.shared(value=W_values, name='W')
         
     def activation(self,z):
     
