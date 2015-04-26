@@ -82,16 +82,24 @@ if __name__ == "__main__":
 
         def __init__(self, rng):
             
-            saturation = 2**-8
-            # saturation = None
-            discrete = True
             n_units = 128
+            discrete = True
+            # saturation = None
+            saturation = 2**-9
+            # bit_width = 8
+            bit_width = 4
+            # stochastic_rounding = True
+            stochastic_rounding = False
             
             Network.__init__(self, n_hidden_layer = 3) 
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, discrete=discrete, saturation=saturation))
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, discrete=discrete, saturation=saturation))
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, discrete=discrete, saturation=saturation))
-            self.layer.append(layer(rng = rng, n_inputs = n_units, n_units = 10, discrete=discrete, saturation=saturation))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, 
+                discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,
+                discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,
+                discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
+            self.layer.append(layer(rng = rng, n_inputs = n_units, n_units = 10,
+                discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
             # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = .15))
             # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = 1000))
     
@@ -100,7 +108,7 @@ if __name__ == "__main__":
     print 'Creating the trainer'
     
     batch_size = 100
-    LR = .03
+    LR = .01
     gpu_batches = 50000/batch_size
     n_epoch = 1000
     monitor_step = 10

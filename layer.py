@@ -31,25 +31,29 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from format import discretize, fixed_point
+from format import discretize, linear_quantization
   
 class layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, discrete=False, W_lr_scale=1., saturation=None):
+    def __init__(self, rng, n_inputs, n_units, discrete=False, saturation=None, bit_width=None, stochastic_rounding=False):
         
         self.rng = rng
         
         self.n_units = n_units
         self.n_inputs = n_inputs
         self.discrete = discrete
-        self.W_lr_scale = W_lr_scale
+        # self.W_lr_scale = W_lr_scale
         self.saturation = saturation
+        self.bit_width = bit_width
+        self.stochastic_rounding = stochastic_rounding
 
         print "    n_units = "+str(n_units)
         print "    n_inputs = "+str(n_inputs)
         print "    discrete = "+str(discrete)
-        print "    W_lr_scale = "+str(W_lr_scale)
+        # print "    W_lr_scale = "+str(W_lr_scale)
         print "    saturation = "+str(saturation)
+        print "    bit_width = "+str(bit_width)
+        print "    stochastic_rounding = "+str(stochastic_rounding)
         
         # self.threshold = 0.1* n_inputs
         
@@ -65,6 +69,7 @@ class layer(object):
         
         self.high = np.float(np.sqrt(6. / (n_inputs + n_units)))
         # print self.high
+        # self.w0 = self.high/2
         
         W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
         # W_values = np.zeros((n_inputs, n_units),dtype=theano.config.floatX)
@@ -92,7 +97,7 @@ class layer(object):
     def activation(self, z):
         return z
     
-    def fprop(self, x, can_fit, binary):
+    def fprop(self, x, can_fit):
         
         # self.W_prop = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
         
@@ -115,14 +120,12 @@ class layer(object):
         # weighted sum
         # z = T.dot(self.x, self.W_prop)
         
-
-        
         # discrete weights
         # I could scale x or z instead of W 
         # and the dot product would become an accumulation
         # I am not doing it because it would mess up with Theano automatic differentiation.
         if self.discrete == True:
-            z =  T.dot(self.x, discretize(self.W,self.high/2.))
+            z =  T.dot(self.x, discretize(self.W,self.high/2))
             
         # continuous weights
         else:
@@ -177,12 +180,43 @@ class layer(object):
         # new_W = self.W - LR * self.dEdW_prop / self.W_scale
         # new_W = self.W - LR / (self.W_scale ** 2) * self.dEdW 
         # new_W = self.W - LR / self.W_scale * self.dEdW 
+
+        # classic update
+        # new_W = self.W - LR * self.W_lr_scale * self.dEdW 
+        new_W = self.W - LR * self.dEdW 
         
-        new_W = self.W - LR * self.W_lr_scale * self.dEdW 
+        # discretization + stochastic rounding
+        # new_W = T.clip(new_W,-self.w0,self.w0)
         
+        # new_W = (new_W+self.w0)/(2*self.w0) 
+        # new_W is in [0,1]
+        
+        # new_W = stochastic_rounding(new_W,self.rng)
+        # new_W = T.round(new_W)
+        
+        # BTW, as we are in [0,1], no need for the sign bit
+        # new_W = fixed_point(X=new_W,NOB=8,NOIB=0,saturation=True)
+        # new_W = fixed_point(X=new_W,NOB=7,NOIB=-8,saturation=True)
+        # new_W = fixed_point(X=new_W,NOB=7,NOIB=-8,saturation=True,stochastic=True , rng=self.rng)
+        
+        # new_W is either 0 or 1
+        # new_W = self.w0*(2*new_W-1)
+        # new_W is either -w0 or w0        
+        
+        # saturation learning rule
         if self.saturation is not None:
+        
             new_W = T.clip(new_W,-self.saturation,self.saturation)
-            # new_W = fixed_point(X=new_W,NOB=7,NOIB=-8,saturation=True,stochastic=True , rng=self.rng)
+            # new_W is in [-saturation,+saturation]
+            
+        # linear quantization
+        if self.bit_width is not None:
+            
+            new_W = linear_quantization(x=new_W,bit_width=self.bit_width,min=-self.saturation,max=self.saturation,
+                stochastic=self.stochastic_rounding,rng=self.rng)
+        
+        # fixed point + saturation + stochastic rounding 
+        # new_W = fixed_point(X=new_W,NOB=7,NOIB=-8,saturation=True,stochastic=True , rng=self.rng)
         
         # 8 bits representation with 1 bit of sign, -2 bits for integer part, and 7 bits for fraction
         # round to nearest -> try stochastic rounding ?

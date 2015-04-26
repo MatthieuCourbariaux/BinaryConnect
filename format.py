@@ -56,18 +56,8 @@ class Discretize(BinaryScalarOp):
 
 discretize = Elemwise(Discretize(upcast_out, name='discretize'))
 
-# float16 function
-# we are using the nvidia cuda function (only works on GPU)
-class Float16(UnaryScalarOp):
-
-    def impl(self, x):
-        return numpy.float32(numpy.float16(x))
-    
-    def c_code(self, node, name, (x,), (z,), sub):
-        return "%(z)s = __half2float(__float2half_rn(%(x)s));" % locals()  
-float16_scalar = Float16(same_out_nocomplex, name='float16')
-float16 = Elemwise(float16_scalar)
-
+# sadly, this function is terribly slow...
+# how could I speed it up ??
 def stochastic_rounding(x, rng):
     
     p = x-T.floor(x)
@@ -78,30 +68,175 @@ def stochastic_rounding(x, rng):
     x = T.floor(x) + p_mask
     
     return x
+
+# unlike fixed point:
+# min and max are not the same power of 2,
+# sign is counted in the bit_width
+def linear_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None):
     
-# this function simulate the precision and the range of a fixed point 
-# while working with floats
-# NOB = Number Of Bits = bit-width
-# NOIB = Number Of Integer Bits = position of the radix point = range
-def fixed_point(X,NOB, NOIB, saturation=True, stochastic=False, rng=None):
+    # n is the number of possible values other than 0 (hence the -1)
+    n = -1 + 2**bit_width
     
-    power = T.cast(2.**(NOB - NOIB), theano.config.floatX) # float !
-    max = T.cast((2.**NOB)-1, theano.config.floatX)
-    value = X*power 
+    # unfortunately, this part requires to have the whole matrix with high precision
+    # As a result, I am not using it
+    if min == None:
+        min = T.min(x)
+    if max == None:
+        max = T.max(x)
+    
+    # should not be necessary but one never knows
+    x = T.clip(x,min,max)
+    # x is in [min,max]
+    x = (x-min)/(max-min)
+    # x is in [0,1]
+    x = x*n
+    # x is in [0,n]
     
     if stochastic == True:
-        value = stochastic_rounding(value, rng)
+        x = stochastic_rounding(x,rng)
+    else: 
+        x = T.round(x)
+        
+    # x is an integer in [0,n]
+    x = x/n
+    # x is in [0,1]
+    x = x*(max-min) + min
+    # x is in [min,max]
     
-    else:
-        value = T.round(value) # round to nearest
+    return x
     
-    if saturation == True:
-        value = T.clip(value, -max, max) # saturation arithmetic
+# PB: is it exponential or log quantization ??
+# I get a better resolution for the values near 0
+def exponential_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None):
     
-    else:
-        # TODO http://en.wikipedia.org/wiki/Modular_arithmetic
-        raise NotImplementedError("Modular arithmetic not implemented yet")
+    # n is the number of possible values other than 0 (hence the -1)
+    n = -1 + 2**bit_width
     
-    value = value/power
-    return value
+    # unfortunately, this part requires to have the whole matrix with high precision
+    # As a result, I am not using it
+    if min == None:
+        min = T.min(x)
+    if max == None:
+        max = T.max(x)
+    
+    # should not be necessary but one never knows
+    x = T.clip(x,min,max)
+    # x is in [min,max]
+    x = (x-min)/(max-min)
+    # x is in [0,1]
+    
+    e = np.exp(1)
+    x = x*np.float32(e-1)+np.float32(1)
+    # x is in [1,e]
+    
+    x = T.log(x)
+    # x is in [0,1]
+    
+    x = x*n
+    # x is in [0,n]
+    
+    if stochastic == True:
+        x = stochastic_rounding(x,rng)
+    else: 
+        x = T.round(x)
+        
+    # x is an integer in [0,n]
+    x = x/n
+    # x is in [0,1]
+    
+    x = T.exp(x)
+    # x is in [1,e]
+    
+    x = (x-np.float32(1))/np.float32(e-1)
+    # x is in [0,1]
+    
+    x = x*(max-min) + min
+    # x is in [min,max]
+    
+    return x
+
+# PB: is it quadratic or root quantization ???
+def quadratic_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None):
+    
+    # n is the number of possible values other than 0 (hence the -1)
+    n = -1 + 2**bit_width
+    
+    # unfortunately, this part requires to have the whole matrix with high precision
+    # As a result, I am not using it
+    if min == None:
+        min = T.min(x)
+    if max == None:
+        max = T.max(x)
+    
+    # should not be necessary but one never knows
+    x = T.clip(x,min,max)
+    # x is in [min,max]
+    x = (x-min)/(max-min)
+    # x is in [0,1]
+    
+    x = T.sqrt(x)
+    # x = T.pow(x,1./1.5)
+    # x is in [0,1]
+    
+    x = x*n
+    # x is in [0,n]
+    
+    if stochastic == True:
+        x = stochastic_rounding(x,rng)
+    else: 
+        x = T.round(x)
+        
+    # x is an integer in [0,n]
+    x = x/n
+    # x is in [0,1]
+    
+    x = T.sqr(x)
+    # x = x = T.pow(x,1.5)
+    # x is in [0,1]
+    
+    x = x*(max-min) + min
+    # x is in [min,max]
+    
+    return x
+    
+def root_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None):
+    
+    # n is the number of possible values other than 0 (hence the -1)
+    n = -1 + 2**bit_width
+    
+    # unfortunately, this part requires to have the whole matrix with high precision
+    # As a result, I am not using it
+    if min == None:
+        min = T.min(x)
+    if max == None:
+        max = T.max(x)
+    
+    # should not be necessary but one never knows
+    x = T.clip(x,min,max)
+    # x is in [min,max]
+    x = (x-min)/(max-min)
+    # x is in [0,1]
+    
+    x = T.sqr(x)
+    # x is in [0,1]
+    
+    x = x*n
+    # x is in [0,n]
+    
+    if stochastic == True:
+        x = stochastic_rounding(x,rng)
+    else: 
+        x = T.round(x)
+        
+    # x is an integer in [0,n]
+    x = x/n
+    # x is in [0,1]
+    
+    x = T.sqrt(x)
+    # x is in [0,1]
+    
+    x = x*(max-min) + min
+    # x is in [min,max]
+    
+    return x
     

@@ -33,12 +33,12 @@ class Network(object):
         
         self.n_hidden_layers = n_hidden_layer
     
-    def fprop(self, x, can_fit, binary):
+    def fprop(self, x, can_fit):
     
-        y = self.layer[0].fprop(x, can_fit, binary)
+        y = self.layer[0].fprop(x, can_fit)
         
         for k in range(1,self.n_hidden_layers+1):
-            y = self.layer[k].fprop(y, can_fit, binary)
+            y = self.layer[k].fprop(y, can_fit)
         
         return y
 
@@ -74,7 +74,7 @@ class Network(object):
     # you give it the input and the target and it gives you the updates
     def parameters_updates(self, x, t, LR):
         
-        y = self.fprop(x, 1, binary=True)        
+        y = self.fprop(x, 1)        
         self.bprop(y, t)
         
         # updates
@@ -86,7 +86,7 @@ class Network(object):
     
     def errors(self, x, t, can_fit):
         
-        y = self.fprop(x, can_fit, binary=True)
+        y = self.fprop(x, can_fit)
         # z = self.layer[self.n_hidden_layers].z
         
         # error function
