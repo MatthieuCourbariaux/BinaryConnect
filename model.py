@@ -45,7 +45,7 @@ class Network(object):
     # when you use fixed point, you cannot use T.grad directly -> bprop modifications.
     def bprop(self, y, t):
         
-        batch_size = T.shape(y)[0]
+        batch_size = T.cast(T.shape(y)[0], dtype=theano.config.floatX)
         
         # MSE
         # cost = T.sum(T.sqr(y-t))/batch_size

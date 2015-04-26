@@ -82,14 +82,14 @@ if __name__ == "__main__":
 
         def __init__(self, rng):
             
-            n_units = 128
+            n_units = 1024
             discrete = True
             # saturation = None
             saturation = 2**-9
             # bit_width = 8
-            bit_width = 4
-            # stochastic_rounding = True
-            stochastic_rounding = False
+            bit_width = 2
+            stochastic_rounding = True
+            # stochastic_rounding = False
             
             Network.__init__(self, n_hidden_layer = 3) 
             self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, 
@@ -111,12 +111,14 @@ if __name__ == "__main__":
     LR = .01
     gpu_batches = 50000/batch_size
     n_epoch = 1000
-    monitor_step = 10
+    monitor_step = 5
+    # LR_decay = 1.
+    LR_decay = 0.95
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
         model = model,
-        LR = LR, LR_decay = 0.999, LR_fin = LR/10000.,
+        LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         batch_size = batch_size, gpu_batches = gpu_batches,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = False, shuffle_examples = True)

@@ -56,13 +56,20 @@ class Discretize(BinaryScalarOp):
 
 discretize = Elemwise(Discretize(upcast_out, name='discretize'))
 
-# sadly, this function is terribly slow...
-# how could I speed it up ??
 def stochastic_rounding(x, rng):
     
     p = x-T.floor(x)
     
-    srng = T.shared_randomstreams.RandomStreams(rng.randint(999999))
+    theano.sandbox.rng_mrg.MRG_RandomStreams
+    
+    # much slower :(
+    # srng = T.shared_randomstreams.RandomStreams(rng.randint(999999))
+    
+    # much faster :)
+    # https://github.com/Theano/Theano/issues/1233#event-262671708
+    # does it work though ?? It seems so :)
+    srng = theano.sandbox.rng_mrg.MRG_RandomStreams(rng.randint(999999))
+    
     p_mask = T.cast(srng.binomial(n=1, p=p, size=T.shape(x)), theano.config.floatX)
     
     x = T.floor(x) + p_mask
@@ -104,7 +111,9 @@ def linear_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None)
     # x is in [min,max]
     
     return x
-    
+
+# merge those with linear quantization ...
+
 # PB: is it exponential or log quantization ??
 # I get a better resolution for the values near 0
 def exponential_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None):
