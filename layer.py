@@ -132,10 +132,16 @@ class layer(object):
             z =  T.dot(self.x, self.W)        
         
         # batch normalization
-        self.new_mean = T.switch(can_fit, T.mean(z,axis=0), self.mean)
-        self.new_var = T.switch(can_fit, T.var(z,axis=0), self.var)
-        # z = (z - self.new_mean)/(T.sqrt(self.new_var+1e-9))
-        # z = self.a * z
+        if can_fit == True:
+            self.new_mean = T.mean(z,axis=0)
+            self.new_var = T.var(z,axis=0)
+            
+        else:
+            self.new_mean = self.mean
+            self.new_var = self.var
+            
+        z = (z - self.new_mean)/(T.sqrt(self.new_var+1e-9))
+        z = self.a * z
         z = z + self.b
         
         # activation function
@@ -144,6 +150,9 @@ class layer(object):
         return y
         
     def BN_updates(self):
+        
+        # self.new_mean = self.mean + self.new_mean
+        # self.new_var = self.var + self.new_var
         
         updates = []
         updates.append((self.mean, self.new_mean)) 
@@ -154,8 +163,8 @@ class layer(object):
     def bprop(self, cost):
         
         self.dEdb = T.grad(cost=cost, wrt=self.b)
-        # self.dEda = T.grad(cost=cost, wrt=self.a)
-        self.dEda = 0
+        self.dEda = T.grad(cost=cost, wrt=self.a)
+        # self.dEda = 0
         # self.dEdW_prop = T.grad(cost=cost, wrt=self.W_prop)
         self.dEdW = T.grad(cost=cost, wrt=self.W)
         

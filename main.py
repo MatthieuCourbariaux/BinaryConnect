@@ -83,13 +83,15 @@ if __name__ == "__main__":
         def __init__(self, rng):
             
             n_units = 1024
-            discrete = True
-            # saturation = None
-            saturation = 2**-9
+            # discrete = True
+            discrete = False
+            saturation = None
+            # saturation = 2**-9
             # bit_width = 8
-            bit_width = 2
-            stochastic_rounding = True
-            # stochastic_rounding = False
+            # bit_width = 1
+            bit_width = None
+            # stochastic_rounding = True
+            stochastic_rounding = False
             
             Network.__init__(self, n_hidden_layer = 3) 
             self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, 
@@ -108,7 +110,7 @@ if __name__ == "__main__":
     print 'Creating the trainer'
     
     batch_size = 100
-    LR = .01
+    LR = .3
     gpu_batches = 50000/batch_size
     n_epoch = 1000
     monitor_step = 5
