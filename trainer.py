@@ -197,8 +197,38 @@ class Trainer(object):
     
     def set_mean_var(self, set):
         
-        self.load_shared_dataset(set,start=0,size=set.X.shape[0])
-        self.set_mean_var_batch()
+        n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
+        n_gpu_batches = np.int(np.floor(n_batches/self.gpu_batches))
+        
+        if self.gpu_batches<=n_batches:
+            n_remaining_batches = n_batches%self.gpu_batches
+        else:
+            n_remaining_batches = n_batches
+        
+        for i in range(n_gpu_batches):
+        
+            self.load_shared_dataset(set,
+                start=i*self.gpu_batches,
+                size=self.gpu_batches)
+            
+            for j in range(self.gpu_batches): 
+
+                self.compute_sum_batch(j)
+        
+        # load the last incomplete gpu batch of batches
+        if n_remaining_batches > 0:
+        
+            self.load_shared_dataset(set,
+                    start=n_gpu_batches*self.gpu_batches,
+                    size=n_remaining_batches)
+            
+            for j in range(n_remaining_batches): 
+
+                self.compute_sum_batch(j)
+        
+        # set the mean and the var of BN
+        n_samples = n_batches*self.batch_size
+        self.compute_mean_var(n_samples)
         
         return
     
@@ -266,7 +296,8 @@ class Trainer(object):
         # input and output variables
         x = T.matrix('x')
         y = T.matrix('y')
-        index = T.lscalar() 
+        index = T.lscalar('index') 
+        n_samples = T.lscalar('n_samples') 
         LR = T.scalar('LR', dtype=theano.config.floatX)
 
         # before the build, you work with symbolic variables
@@ -282,12 +313,13 @@ class Trainer(object):
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "test_batch", on_unused_input='warn')
         
-        # self.set_mean_var_batch = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
-                # x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
-                # name = "set_mean_var_batch", on_unused_input='warn')
+        # batch normalization specific functions
+        # I am forced to compute mean and var over the whole datasets because of memory explosion.
+        self.compute_sum_batch = theano.function(inputs = [index], updates=self.model.BN_updates_1(x), givens={
+                x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
+                name = "compute_sum_batch", on_unused_input='warn')
                 
-        self.set_mean_var_batch = theano.function(inputs = [], updates=self.model.BN_updates(x), givens={
-                x: self.shared_x},
-                name = "set_mean_var_batch", on_unused_input='warn')
+        self.compute_mean_var = theano.function(inputs = [n_samples], updates=self.model.BN_updates_2(n_samples),
+                name = "compute_mean_var", on_unused_input='warn')
                 
                

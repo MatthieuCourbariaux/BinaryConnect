@@ -93,6 +93,8 @@ class layer(object):
         
         self.mean = theano.shared(value=b_values, name='mean')
         self.var = theano.shared(value=b_values, name='var')
+        self.sum = theano.shared(value=b_values, name='sum')
+        self.sum2 = theano.shared(value=b_values, name='sum2')
     
     def activation(self, z):
         return z
@@ -129,18 +131,21 @@ class layer(object):
             
         # continuous weights
         else:
-            z =  T.dot(self.x, self.W)        
+            z =  T.dot(self.x, self.W)       
+        
+        # for BN updates
+        self.z = z
         
         # batch normalization
         if can_fit == True:
-            self.new_mean = T.mean(z,axis=0)
-            self.new_var = T.var(z,axis=0)
+            mean = T.mean(z,axis=0)
+            var = T.var(z,axis=0)
             
         else:
-            self.new_mean = self.mean
-            self.new_var = self.var
+            mean = self.mean
+            var = self.var
             
-        z = (z - self.new_mean)/(T.sqrt(self.new_var+1e-9))
+        z = (z - mean)/(T.sqrt(var+1e-9))
         z = self.a * z
         z = z + self.b
         
@@ -149,14 +154,33 @@ class layer(object):
         
         return y
         
-    def BN_updates(self):
-        
-        # self.new_mean = self.mean + self.new_mean
-        # self.new_var = self.var + self.new_var
+    def BN_updates_1(self):
         
         updates = []
-        updates.append((self.mean, self.new_mean)) 
-        updates.append((self.var, self.new_var))
+        updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
+        updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
+        
+        return updates
+        
+    def BN_updates_2(self,n_samples):
+        
+        updates = []
+        
+        # reset the sums
+        updates.append((self.sum, 0.* self.sum))
+        updates.append((self.sum2, 0.* self.sum2))
+        
+        # for the GPU
+        n_samples = T.cast(n_samples,dtype=theano.config.floatX)
+        
+        # compute the mean and variance
+        mean = self.sum/n_samples
+        mean2 = self.sum2/n_samples
+        
+        updates.append((self.mean, mean))
+        
+        # variance = mean(x^2) - mean(x)^2
+        updates.append((self.var, mean2 - mean**2))
         
         return updates
         
