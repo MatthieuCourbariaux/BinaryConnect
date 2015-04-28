@@ -317,9 +317,9 @@ class Trainer(object):
         # I am forced to compute mean and var over the whole datasets because of memory explosion.
         self.compute_sum_batch = theano.function(inputs = [index], updates=self.model.BN_updates_1(x), givens={
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
-                name = "compute_sum_batch", on_unused_input='warn')
+                name = "compute_sum_batch", on_unused_input='ignore')
                 
         self.compute_mean_var = theano.function(inputs = [n_samples], updates=self.model.BN_updates_2(n_samples),
-                name = "compute_mean_var", on_unused_input='warn')
+                name = "compute_mean_var", on_unused_input='ignore')
                 
                

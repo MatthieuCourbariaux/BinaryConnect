@@ -27,33 +27,37 @@ import theano.printing as P
 from theano import pp
 import time
 import scipy.stats
+
+# for convolution layers
 from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
 from format import discretize, linear_quantization
-  
-class layer(object):
+
+class linear_layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, discrete=False, saturation=None, bit_width=None, stochastic_rounding=False):
+    def __init__(self, rng, n_inputs, n_units, BN=False, discrete=False, saturation=None, bit_width=None, stochastic_rounding=False):
         
         self.rng = rng
         
         self.n_units = n_units
+        print "        n_units = "+str(n_units)
         self.n_inputs = n_inputs
-        self.discrete = discrete
+        print "        n_inputs = "+str(n_inputs)
+        self.BN = BN
+        print "        BN = "+str(BN)
         # self.W_lr_scale = W_lr_scale
-        self.saturation = saturation
-        self.bit_width = bit_width
-        self.stochastic_rounding = stochastic_rounding
-
-        print "    n_units = "+str(n_units)
-        print "    n_inputs = "+str(n_inputs)
-        print "    discrete = "+str(discrete)
         # print "    W_lr_scale = "+str(W_lr_scale)
-        print "    saturation = "+str(saturation)
-        print "    bit_width = "+str(bit_width)
-        print "    stochastic_rounding = "+str(stochastic_rounding)
+        
+        self.discrete = discrete
+        print "        discrete = "+str(discrete)
+        self.saturation = saturation
+        print "        saturation = "+str(saturation)
+        self.bit_width = bit_width
+        print "        bit_width = "+str(bit_width)
+        self.stochastic_rounding = stochastic_rounding
+        print "        stochastic_rounding = "+str(stochastic_rounding)     
         
         # self.threshold = 0.1* n_inputs
         
@@ -67,7 +71,7 @@ class layer(object):
         # self.high= np.sqrt(6. / (n_inputs + n_units))
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
-        self.high = np.float(np.sqrt(6. / (n_inputs + n_units)))
+        self.high = np.float32(np.sqrt(6. / (n_inputs + n_units)))
         # print self.high
         # self.w0 = self.high/2
         
@@ -117,7 +121,8 @@ class layer(object):
         # weights are either 1, either 0 -> propagating = sums
         # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
         
-        self.x = x
+        # shape the input as it should be
+        self.x = x.flatten(2)
         
         # weighted sum
         # z = T.dot(self.x, self.W_prop)
@@ -127,11 +132,14 @@ class layer(object):
         # and the dot product would become an accumulation
         # I am not doing it because it would mess up with Theano automatic differentiation.
         if self.discrete == True:
-            z =  T.dot(self.x, discretize(self.W,self.high/2))
+            W = discretize(self.W,self.high/np.float32(2))
             
         # continuous weights
         else:
-            z =  T.dot(self.x, self.W)       
+            W = self.W
+        
+        # linear part
+        z =  T.dot(self.x, W)       
         
         # for BN updates
         self.z = z
@@ -144,9 +152,11 @@ class layer(object):
         else:
             mean = self.mean
             var = self.var
+        
+        if self.BN == True:
+            z = (z - mean)/(T.sqrt(var+1e-9))
+            z = self.a * z
             
-        z = (z - mean)/(T.sqrt(var+1e-9))
-        z = self.a * z
         z = z + self.b
         
         # activation function
@@ -157,8 +167,11 @@ class layer(object):
     def BN_updates_1(self):
         
         updates = []
-        updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
-        updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
+        
+        if self.BN == True:
+        
+            updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
+            updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
         
         return updates
         
@@ -166,33 +179,38 @@ class layer(object):
         
         updates = []
         
-        # reset the sums
-        updates.append((self.sum, 0.* self.sum))
-        updates.append((self.sum2, 0.* self.sum2))
+        if self.BN == True:
         
-        # for the GPU
-        n_samples = T.cast(n_samples,dtype=theano.config.floatX)
-        
-        # compute the mean and variance
-        mean = self.sum/n_samples
-        mean2 = self.sum2/n_samples
-        
-        updates.append((self.mean, mean))
-        
-        # variance = mean(x^2) - mean(x)^2
-        updates.append((self.var, mean2 - mean**2))
+            # reset the sums
+            updates.append((self.sum, 0.* self.sum))
+            updates.append((self.sum2, 0.* self.sum2))
+            
+            # for the GPU
+            n_samples = T.cast(n_samples,dtype=theano.config.floatX)
+            
+            # compute the mean and variance
+            mean = self.sum/n_samples
+            mean2 = self.sum2/n_samples
+            
+            updates.append((self.mean, mean))
+            
+            # variance = mean(x^2) - mean(x)^2
+            updates.append((self.var, mean2 - mean**2))
         
         return updates
         
     def bprop(self, cost):
-        
-        self.dEdb = T.grad(cost=cost, wrt=self.b)
-        self.dEda = T.grad(cost=cost, wrt=self.a)
-        # self.dEda = 0
-        # self.dEdW_prop = T.grad(cost=cost, wrt=self.W_prop)
+       
+
         self.dEdW = T.grad(cost=cost, wrt=self.W)
+        self.dEdb = T.grad(cost=cost, wrt=self.b)
+        
+        if self.BN == True:
+            self.dEda = T.grad(cost=cost, wrt=self.a)
         
     def parameters_updates(self, LR):    
+        
+        updates = []
         
         # srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999))
         # LR_mask = T.cast(srng.binomial(n=1, p=LR, size=T.shape(self.W)), theano.config.floatX)
@@ -248,41 +266,18 @@ class layer(object):
             new_W = linear_quantization(x=new_W,bit_width=self.bit_width,min=-self.saturation,max=self.saturation,
                 stochastic=self.stochastic_rounding,rng=self.rng)
         
-        # fixed point + saturation + stochastic rounding 
-        # new_W = fixed_point(X=new_W,NOB=7,NOIB=-8,saturation=True,stochastic=True , rng=self.rng)
-        
-        # 8 bits representation with 1 bit of sign, -2 bits for integer part, and 7 bits for fraction
-        # round to nearest -> try stochastic rounding ?
-        # new_W = apply_format("FXP", new_W, 4, -4)
-        
-        # Try saturation and no fixed point...
-        
-        # new_W = self.W - LR * self.dEdW
+        updates.append((self.W, new_W))
         
         new_b = self.b - LR * self.dEdb
-        # new_b = self.b - LR * self.dEdb/100
-        new_a = self.a - LR * self.dEda
-        # new_b1 = self.b1 - LR * self.dEdb1
-
-        # return the updates of shared variables
-        updates = []
-        updates.append((self.W, new_W))
-        # updates.append((self.W1, new_W1))
         updates.append((self.b, new_b))
-        updates.append((self.a, new_a))
-        # updates.append((self.b1, new_b1))
         
+        if self.BN == True:
+            new_a = self.a - LR * self.dEda
+            updates.append((self.a, new_a))
+
         return updates
 
-class ReLU_layer(layer):
-
-    # def __init__(self, **kwargs):
-        
-        # call mother class constructor
-        # layer.__init__(self, **kwargs)   
-        
-        # W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
-        # self.W = theano.shared(value=W_values, name='W')
+class ReLU_layer(linear_layer):
         
     def activation(self,z):
     
@@ -294,5 +289,156 @@ class ReLU_layer(layer):
         # Roland activation function
         # return T.ge(z,1.)*z
         
-        # return z
+class ReLU_conv_layer(linear_layer): 
+    
+    def __init__(self, rng, image_shape, zero_pad, filter_shape, filter_stride, pool_shape, pool_stride, output_shape, partial_sum, BN,
+        discrete=False, saturation=None, bit_width=None, stochastic_rounding=False):
+        
+        self.rng = rng
+        
+        self.image_shape = image_shape
+        print "        image_shape = "+str(image_shape)
+        self.zero_pad = zero_pad
+        print "        zero_pad = "+str(zero_pad)
+        self.filter_shape = filter_shape
+        print "        filter_shape = "+str(filter_shape)
+        self.filter_stride = filter_stride
+        print "        filter_stride = "+str(filter_stride)
+        self.pool_shape = pool_shape
+        print "        pool_shape = "+str(pool_shape)
+        self.pool_stride = pool_stride
+        print "        pool_stride = "+str(pool_stride)
+        self.output_shape = output_shape
+        print "        output_shape = "+str(output_shape)         
+        self.partial_sum = partial_sum
+        print "        partial_sum = "+str(partial_sum)
+        self.BN = BN
+        print "        BN = "+str(BN)
+        # self.W_lr_scale = W_lr_scale
+        # print "    W_lr_scale = "+str(W_lr_scale)
+        
+        self.discrete = discrete
+        print "        discrete = "+str(discrete)
+        self.saturation = saturation
+        print "        saturation = "+str(saturation)
+        self.bit_width = bit_width
+        print "        bit_width = "+str(bit_width)
+        self.stochastic_rounding = stochastic_rounding
+        print "        stochastic_rounding = "+str(stochastic_rounding)     
+
+        # range of init
+        n_inputs = np.prod(filter_shape[1:])
+        n_units = (filter_shape[0] * np.prod(filter_shape[2:])/ np.prod(pool_shape)) 
+
+        # initialize weights with random weights
+        self.high = np.float32(np.sqrt(6. / (n_inputs + n_units)))
+        
+        # filters parameters
+        W_values = np.asarray(rng.uniform(low=-self.high, high=self.high, size=self.filter_shape),dtype=theano.config.floatX)
+        self.W = theano.shared(W_values)
+                
+         # the bias is a 1D tensor -- one bias per output feature map
+        b_values = np.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
+        self.b = theano.shared(value=b_values)
+        
+        # BN stuff
+        a_values = np.ones((self.filter_shape[0],), dtype=theano.config.floatX)
+        self.a = theano.shared(value=a_values, name='a')        
+        
+        self.mean = theano.shared(value=b_values, name='mean')
+        self.var = theano.shared(value=b_values, name='var')
+        self.sum = theano.shared(value=b_values, name='sum')
+        self.sum2 = theano.shared(value=b_values, name='sum2')
+        
+    def fprop(self, x, can_fit):
+        
+        # shape the input as it should be
+        x = x.reshape(self.image_shape)
+        
+        # discrete weights
+        if self.discrete == True:
+            W = discretize(self.W,self.high/np.float32(2))
+            
+        # continuous weights
+        else:
+            W = self.W
+        
+        # convolution
+        x = x.dimshuffle(1, 2, 3, 0) # bc01 to c01b
+        W = W.dimshuffle(1, 2, 3, 0) # bc01 to c01b
+        conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
+        x = gpu_contiguous(x)
+        W = gpu_contiguous(W)
+        z = conv_op(x, W)
+        
+        # Maxpooling
+        pool_op = MaxPool(ds=self.pool_shape, stride=self.pool_stride)
+        z = pool_op(z)
+        z = z.dimshuffle(3, 0, 1, 2) # c01b to bc01
+        
+        # for BN
+        self.z = z
+        
+        # batch normalization
+        if can_fit == True:
+            
+            # in the convolutional case, there is only a mean per feature map and not per location
+            # http://arxiv.org/pdf/1502.03167v3.pdf
+            mean = T.mean(z,axis=(0,2,3))
+            var = T.var(z,axis=(0,2,3))
+            
+        else:
+            mean = self.mean
+            var = self.var
+        
+        if self.BN == True:
+            z = (z - mean.dimshuffle('x', 0, 'x', 'x'))/(T.sqrt(var.dimshuffle('x', 0, 'x', 'x')+1e-9))
+            z = self.a.dimshuffle('x', 0, 'x', 'x') * z
+        
+        # bias
+        z = z + self.b.dimshuffle('x', 0, 'x', 'x')
+        
+        # activation
+        y = self.activation(z)
+        
+        return y
+        
+    def BN_updates_1(self):
+        
+        updates = []
+        
+        if self.BN == True:
+        
+            updates.append((self.sum, self.sum + T.sum(self.z,axis=(0,2,3)))) 
+            updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=(0,2,3))))
+        
+        return updates
+        
+    def BN_updates_2(self,n_samples):
+        
+        updates = []
+        
+        if self.BN == True:
+        
+            # reset the sums
+            updates.append((self.sum, 0.* self.sum))
+            updates.append((self.sum2, 0.* self.sum2))
+            
+            # for the GPU
+            n_samples = T.cast(n_samples*self.output_shape[2]*self.output_shape[3],dtype=theano.config.floatX)
+            
+            # compute the mean and variance
+            mean = self.sum/n_samples
+            mean2 = self.sum2/n_samples
+            
+            updates.append((self.mean, mean))
+            
+            # variance = mean(x^2) - mean(x)^2
+            updates.append((self.var, mean2 - mean**2))
+        
+        return updates
+        
+    def activation(self,z):
+    
+        return T.maximum(0.,z)
         

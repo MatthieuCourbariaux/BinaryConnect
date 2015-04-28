@@ -25,7 +25,7 @@ import time
 
 from trainer import Trainer
 from model import Network
-from layer import layer, ReLU_layer    
+from layer import linear_layer, ReLU_layer, ReLU_conv_layer  
 
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
@@ -92,29 +92,128 @@ if __name__ == "__main__":
             bit_width = None
             # stochastic_rounding = True
             stochastic_rounding = False
+            # BN = True
+            BN = False
             
             Network.__init__(self, n_hidden_layer = 3) 
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, 
+            
+            print "    Fully connected layer 1:"
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN,
                 discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
+                
+            print "    Fully connected layer 2:"
             self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,
                 discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,
+                
+            print "    Fully connected layer 3:"
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN,
                 discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
-            self.layer.append(layer(rng = rng, n_inputs = n_units, n_units = 10,
+                
+            print "    L2 SVM layer:"
+            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = 10, BN = BN,
                 discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
-            # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = .15))
-            # self.layer.append(layer(rng = rng, n_inputs = 1024, n_units = 10, W_lr_scale = 1000))
     
-    model = PI_MNIST_model(rng = rng)
+    # model = PI_MNIST_model(rng = rng)
+    
+    batch_size = 128
+    
+    class MNIST_model(Network):
+
+        def __init__(self, rng):
+            
+            # discrete = True
+            discrete = False
+            saturation = None
+            # saturation = 2**-4
+            # saturation = 2**-9
+            # bit_width = 8
+            # bit_width = 1
+            bit_width = None
+            # stochastic_rounding = True
+            stochastic_rounding = False
+            BN = True
+            # BN = False
+            
+            Network.__init__(self, n_hidden_layer = 3) 
+            
+            print "    Convolution layer 1:"
+        
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                image_shape=(batch_size, 1, 28, 28),
+                zero_pad = 0, # add n zero on both side of the input
+                filter_shape=(32, 1, 8, 8),
+                filter_stride = 1,
+                pool_shape=(4, 4),
+                pool_stride = 2,
+                output_shape = (batch_size, 32, 10, 10),
+                partial_sum=1, 
+                BN=BN,
+                discrete=discrete, 
+                saturation=saturation, 
+                bit_width=bit_width, 
+                stochastic_rounding=stochastic_rounding
+            ))
+
+            print "    Convolution layer 2:"
+        
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                image_shape=(batch_size, 32, 10, 10),
+                zero_pad = 3, 
+                filter_shape=(32, 32, 8, 8),
+                filter_stride = 1,
+                pool_shape=(4, 4),
+                pool_stride =2,
+                output_shape = (batch_size, 32, 4, 4),
+                partial_sum=1, 
+                BN=BN,
+                discrete=discrete, 
+                saturation=saturation, 
+                bit_width=bit_width, 
+                stochastic_rounding=stochastic_rounding
+            ))
+            
+            print "    Convolution layer 3:"
+        
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                image_shape=(batch_size, 32, 4, 4),
+                zero_pad = 3,
+                filter_shape=(16, 32, 5, 5),
+                filter_stride = 1,
+                pool_shape=(2, 2),
+                pool_stride =2,
+                output_shape = (batch_size, 16, 3, 3),
+                partial_sum=1, 
+                BN=BN,
+                discrete=discrete, 
+                saturation=saturation, 
+                bit_width=bit_width, 
+                stochastic_rounding=stochastic_rounding
+            ))
+            
+            print "    L2 SVM layer:"
+            
+            self.layer.append(linear_layer(
+                rng = rng, 
+                n_inputs= 16*3*3, 
+                n_units = 10, 
+                BN=BN,
+                discrete=discrete, 
+                saturation=saturation, 
+                bit_width=bit_width, 
+                stochastic_rounding=stochastic_rounding
+            ))
+            
+    model = MNIST_model(rng = rng)
     
     print 'Creating the trainer'
     
-    batch_size = 100
     LR = .3
     gpu_batches = 50000/batch_size
     n_epoch = 1000
     monitor_step = 5
-    # LR_decay = 1.
     LR_decay = 0.95
     
     trainer = Trainer(rng = rng,
