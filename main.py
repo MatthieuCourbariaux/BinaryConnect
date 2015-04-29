@@ -1,19 +1,19 @@
 # Copyright 2014 Matthieu Courbariaux
 
-# This file is part of deep-learning-storage.
+# This file is part of deep-learning-discrete.
 
-# deep-learning-storage is free software: you can redistribute it and/or modify
+# deep-learning-discrete is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-# deep-learning-storage is distributed in the hope that it will be useful,
+# deep-learning-discrete is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with deep-learning-storage.  If not, see <http://www.gnu.org/licenses/>.
+# along with deep-learning-discrete.  If not, see <http://www.gnu.org/licenses/>.
 
 import gzip
 import cPickle
@@ -30,9 +30,9 @@ from layer import linear_layer, ReLU_layer, ReLU_conv_layer
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
 
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from filter_plot import tile_raster_images
+# import matplotlib.pyplot as plt
+# import matplotlib.cm as cm
+# from filter_plot import tile_raster_images
           
 def onehot(x,numclasses=None):
 
@@ -56,7 +56,8 @@ if __name__ == "__main__":
           
     print 'Loading the dataset' 
     
-    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
+    # train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
+    train_set = MNIST(which_set= 'train', start=0, stop = 640, center = True) # for testing data augmentation
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
     test_set = MNIST(which_set= 'test', center = True)
     
@@ -92,8 +93,8 @@ if __name__ == "__main__":
             bit_width = None
             # stochastic_rounding = True
             stochastic_rounding = False
-            # BN = True
-            BN = False
+            BN = True
+            # BN = False
             
             Network.__init__(self, n_hidden_layer = 3) 
             
@@ -113,7 +114,7 @@ if __name__ == "__main__":
             self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = 10, BN = BN,
                 discrete=discrete, saturation=saturation, bit_width = bit_width, stochastic_rounding= stochastic_rounding))
     
-    # model = PI_MNIST_model(rng = rng)
+    model = PI_MNIST_model(rng = rng)
     
     batch_size = 128
     
@@ -121,8 +122,8 @@ if __name__ == "__main__":
 
         def __init__(self, rng):
             
-            # discrete = True
-            discrete = False
+            discrete = True
+            # discrete = False
             saturation = None
             # saturation = 2**-4
             # saturation = 2**-9
@@ -134,14 +135,14 @@ if __name__ == "__main__":
             BN = True
             # BN = False
             
-            Network.__init__(self, n_hidden_layer = 3) 
+            Network.__init__(self, n_hidden_layer = 4) 
             
             print "    Convolution layer 1:"
         
             self.layer.append(ReLU_conv_layer(
                 rng,
                 image_shape=(batch_size, 1, 28, 28),
-                zero_pad = 0, # add n zero on both side of the input
+                zero_pad = 0, # add n zeros on both sides of the input
                 filter_shape=(32, 1, 8, 8),
                 filter_stride = 1,
                 pool_shape=(4, 4),
@@ -154,18 +155,37 @@ if __name__ == "__main__":
                 bit_width=bit_width, 
                 stochastic_rounding=stochastic_rounding
             ))
+            
+            print "    NiN layer:"
+        
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                image_shape=(batch_size, 32, 10, 10),
+                zero_pad = 0,
+                filter_shape=(16, 32, 1, 1),
+                filter_stride = 1,
+                pool_shape=(1, 1),
+                pool_stride = 1,
+                output_shape = (batch_size, 16, 10, 10),
+                partial_sum=1, 
+                BN=BN,
+                discrete=discrete, 
+                saturation=saturation, 
+                bit_width=bit_width, 
+                stochastic_rounding=stochastic_rounding
+            ))
 
             print "    Convolution layer 2:"
         
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, 32, 10, 10),
+                image_shape=(batch_size, 16, 10, 10),
                 zero_pad = 3, 
-                filter_shape=(32, 32, 8, 8),
+                filter_shape=(16, 16, 8, 8),
                 filter_stride = 1,
                 pool_shape=(4, 4),
                 pool_stride =2,
-                output_shape = (batch_size, 32, 4, 4),
+                output_shape = (batch_size, 16, 4, 4),
                 partial_sum=1, 
                 BN=BN,
                 discrete=discrete, 
@@ -178,9 +198,9 @@ if __name__ == "__main__":
         
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, 32, 4, 4),
+                image_shape=(batch_size, 16, 4, 4),
                 zero_pad = 3,
-                filter_shape=(16, 32, 5, 5),
+                filter_shape=(16, 16, 5, 5),
                 filter_stride = 1,
                 pool_shape=(2, 2),
                 pool_stride =2,
@@ -206,15 +226,16 @@ if __name__ == "__main__":
                 stochastic_rounding=stochastic_rounding
             ))
             
-    model = MNIST_model(rng = rng)
+    # model = MNIST_model(rng = rng)
     
     print 'Creating the trainer'
     
     LR = .3
-    gpu_batches = 50000/batch_size
-    n_epoch = 1000
-    monitor_step = 5
-    LR_decay = 0.95
+    # LR = .01
+    gpu_batches = 10000/batch_size
+    n_epoch = 3000
+    monitor_step = 200
+    LR_decay = .9994
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
@@ -235,9 +256,9 @@ if __name__ == "__main__":
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
     
-    print 'Display weights'
+    # print 'Display weights'
     
-    W = 2.* (np.transpose(model.layer[0].W.get_value())>=0.) - 1.
-    W = tile_raster_images(W,(28,28),(5,5),(2, 2))
-    plt.imshow(W, cmap = cm.Greys_r)
-    plt.show()
+    # W = 2.* (np.transpose(model.layer[0].W.get_value())>=0.) - 1.
+    # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
+    # plt.imshow(W, cmap = cm.Greys_r)
+    # plt.show()

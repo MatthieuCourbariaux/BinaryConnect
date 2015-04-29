@@ -1,19 +1,19 @@
 # Copyright 2014 Matthieu Courbariaux
 
-# This file is part of deep-learning-storage.
+# This file is part of deep-learning-discrete.
 
-# deep-learning-storage is free software: you can redistribute it and/or modify
+# deep-learning-discrete is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-# deep-learning-storage is distributed in the hope that it will be useful,
+# deep-learning-discrete is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with deep-learning-storage.  If not, see <http://www.gnu.org/licenses/>.
+# along with deep-learning-discrete.  If not, see <http://www.gnu.org/licenses/>.
 
 import gzip
 import cPickle
@@ -282,9 +282,7 @@ class ReLU_layer(linear_layer):
     def activation(self,z):
     
         return T.maximum(0.,z)
-        # return T.maximum(z/3.,z)
-        # return T.maximum(z/10.,z)
-        # return T.maximum(z/100.,z)
+        # return T.maximum(z*.01,z)
         
         # Roland activation function
         # return T.ge(z,1.)*z
@@ -441,4 +439,5 @@ class ReLU_conv_layer(linear_layer):
     def activation(self,z):
     
         return T.maximum(0.,z)
+        # return T.maximum(z*.01,z)
         

@@ -1,19 +1,19 @@
 # Copyright 2014 Matthieu Courbariaux
 
-# This file is part of deep-learning-storage.
+# This file is part of deep-learning-discrete.
 
-# deep-learning-storage is free software: you can redistribute it and/or modify
+# deep-learning-discrete is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-# deep-learning-storage is distributed in the hope that it will be useful,
+# deep-learning-discrete is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with deep-learning-storage.  If not, see <http://www.gnu.org/licenses/>.
+# along with deep-learning-discrete.  If not, see <http://www.gnu.org/licenses/>.
 
 import gzip
 import cPickle
@@ -24,6 +24,15 @@ import sys
 import theano 
 import theano.tensor as T
 import time
+
+# for data augmentation
+from scipy.ndimage.interpolation import rotate, affine_transform
+# import cv2
+
+class dataset(object):
+    def __init__(self,set):
+        self.X = np.copy(set.X)
+        self.y = np.copy(set.y)
 
 # TRAINING
 
@@ -37,6 +46,7 @@ class Trainer(object):
             batch_size, gpu_batches,
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
+            # data_augmentation):
         
         print '    Learning rate = %f' %(LR)
         print '    Learning rate decay = %f' %(LR_decay)
@@ -47,14 +57,19 @@ class Trainer(object):
         print '    Monitor step = %i' %(monitor_step)
         print '    shuffle_batches = %i' %(shuffle_batches)
         print '    shuffle_examples = %i' %(shuffle_examples)
+        # print '    data_augmentation = %i' %(data_augmentation)
 
         # save the dataset
         self.rng = rng
         self.shuffle_batches = shuffle_batches
         self.shuffle_examples = shuffle_examples
+        # self.data_augmentation = data_augmentation
         self.train_set = train_set
         self.valid_set = valid_set
         self.test_set = test_set
+        
+        # in order to avoid augmenting already augmented data
+        self.DA_train_set = dataset(train_set)
         
         # save the model
         self.model = model
@@ -67,7 +82,6 @@ class Trainer(object):
         self.gpu_batches = gpu_batches
         self.n_epoch = n_epoch
         self.step = monitor_step
-        self.format = format
         
         # put a part of the dataset on gpu
         self.shared_x = theano.shared(
@@ -77,17 +91,49 @@ class Trainer(object):
     
     def shuffle(self, set):
         
-        # on the CPU for the moment.
-        X = np.copy(set.X)
-        y = np.copy(set.y)
+        shuffled_set = dataset(set)
                 
         shuffled_index = range(set.X.shape[0])
         self.rng.shuffle(shuffled_index)
         
         for i in range(set.X.shape[0]):
-            set.X[i] = X[shuffled_index[i]]
-            set.y[i] = y[shuffled_index[i]]
-    
+            
+            shuffled_set.X[i] = set.X[shuffled_index[i]]
+            shuffled_set.y[i] = set.y[shuffled_index[i]]
+            
+        return shuffled_set
+            
+    def data_augment(self,set):
+        
+        DA_set = dataset(set)
+        
+        for i in range(set.X.shape[0]):
+            
+            # openCV code
+            # M = np.float32([[1,0,0],[0,1,0]])
+            # DA_set.X[i] = cv2.warpAffine(set.X[i],M,(28,28))
+            
+            # making an affine transformation of the coordinate of the images
+            # result is rotation, translation, scaling, skewing
+            # to adjust a and b, limit the size of the dataset
+            
+            a = .075
+            A = np.identity(n=2)+self.rng.uniform(low=-a,high=a,size=(2, 2))
+            # A = np.identity(n=2)
+            b = .5
+            B = self.rng.uniform(low=-b,high=b,size=(2))
+            # B = np.zeros(shape=(2))
+            DA_set.X[i]=affine_transform(set.X[i].reshape(28,28),A,offset=B,order=2).reshape(784)
+            
+            # max_rot = 15
+            # angle = self.rng.random_integers(-max_rot,max_rot)
+            # DA_set.X[i] = rotate(DA_set.X[i].reshape(28,28),angle, reshape=False).reshape(784)
+        
+        # print set.X[0].reshape(28,28)
+        # print DA_set.X[0].reshape(28,28)
+        
+        return DA_set
+        
     def init(self):
         
         self.epoch = 0
@@ -113,19 +159,23 @@ class Trainer(object):
         
         # start by shuffling train set
         if self.shuffle_examples == True:
-            self.shuffle(self.train_set)
+            self.train_set = self.shuffle(self.train_set)
+            
+        # data augmentation
+        self.DA_train_set = self.data_augment(self.train_set)
         
         self.epoch += self.step
         
         for k in range(self.step):
         
             # train the model on all training examples
-            self.train_epoch(self.train_set)
+            self.train_epoch(self.DA_train_set)
             
             # update LR as well during the first phase
             self.update_LR()
         
         # set the mean and variance for BN
+        # not on the DA training set
         self.set_mean_var(self.train_set)
         
         # test it on the validation set
@@ -195,6 +245,7 @@ class Trainer(object):
 
                 self.train_batch(j, self.LR)
     
+    # batch normalization function
     def set_mean_var(self, set):
         
         n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
