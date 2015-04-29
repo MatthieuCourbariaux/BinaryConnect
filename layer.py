@@ -121,7 +121,7 @@ class linear_layer(object):
         # weights are either 1, either 0 -> propagating = sums
         # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
         
-        # shape the input as it should be
+        # shape the input as a matrix (batch_size, n_inputs)
         self.x = x.flatten(2)
         
         # weighted sum
@@ -350,8 +350,8 @@ class ReLU_conv_layer(linear_layer):
         
     def fprop(self, x, can_fit):
         
-        # shape the input as it should be
-        x = x.reshape(self.image_shape)
+        # shape the input as it should be (not necessary)
+        # x = x.reshape(self.image_shape)
         
         # discrete weights
         if self.discrete == True:

@@ -103,34 +103,37 @@ class Trainer(object):
             
         return shuffled_set
             
-    def data_augment(self,set):
+    def affine_transformations(self,set):
         
         DA_set = dataset(set)
         
+        # for every samples
         for i in range(set.X.shape[0]):
-            
+
             # openCV code
             # M = np.float32([[1,0,0],[0,1,0]])
             # DA_set.X[i] = cv2.warpAffine(set.X[i],M,(28,28))
             
-            # making an affine transformation of the coordinate of the images
-            # result is rotation, translation, scaling, skewing
+            # making an affine transformation of the coordinate of the points of the image
+            # (x',y') = A(x,y) + B
+            # result is rotation, translation, scaling on each axis
             # to adjust a and b, limit the size of the dataset
-            
-            a = .075
+
+            a = .1 # best for CNN MNIST, 128 samples
+            # a = 0.
             A = np.identity(n=2)+self.rng.uniform(low=-a,high=a,size=(2, 2))
-            # A = np.identity(n=2)
-            b = .5
+            b = .5 # best for CNN MNIST, 128 samples
+            # b = 0.
             B = self.rng.uniform(low=-b,high=b,size=(2))
-            # B = np.zeros(shape=(2))
-            DA_set.X[i]=affine_transform(set.X[i].reshape(28,28),A,offset=B,order=2).reshape(784)
             
-            # max_rot = 15
-            # angle = self.rng.random_integers(-max_rot,max_rot)
-            # DA_set.X[i] = rotate(DA_set.X[i].reshape(28,28),angle, reshape=False).reshape(784)
-        
-        # print set.X[0].reshape(28,28)
-        # print DA_set.X[0].reshape(28,28)
+            # for every channels
+            for j in range(set.X.shape[1]):
+            
+                DA_set.X[i]=affine_transform(set.X[i][j],A,offset=B,order=2)
+                
+                # max_rot = 15
+                # angle = self.rng.random_integers(-max_rot,max_rot)
+                # DA_set.X[i] = rotate(DA_set.X[i].reshape(28,28),angle, reshape=False).reshape(784)
         
         return DA_set
         
@@ -162,7 +165,7 @@ class Trainer(object):
             self.train_set = self.shuffle(self.train_set)
             
         # data augmentation
-        self.DA_train_set = self.data_augment(self.train_set)
+        self.DA_train_set = self.affine_transformations(self.train_set)
         
         self.epoch += self.step
         
@@ -345,7 +348,7 @@ class Trainer(object):
     def build(self):
         
         # input and output variables
-        x = T.matrix('x')
+        x = T.tensor4('x')
         y = T.matrix('y')
         index = T.lscalar('index') 
         n_samples = T.lscalar('n_samples') 
