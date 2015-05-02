@@ -33,11 +33,13 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from format import discretize, linear_quantization
+from format import linear_quantization
 
 class linear_layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, BN=False, discrete=False, saturation=None, bit_width=None, stochastic_rounding=False):
+    def __init__(self, rng, n_inputs, n_units, BN=False,
+        prop_bit_width=None, prop_stochastic_rounding=False,
+        update_bit_width=None, update_stochastic_rounding=False):
         
         self.rng = rng
         
@@ -50,14 +52,14 @@ class linear_layer(object):
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
         
-        self.discrete = discrete
-        print "        discrete = "+str(discrete)
-        self.saturation = saturation
-        print "        saturation = "+str(saturation)
-        self.bit_width = bit_width
-        print "        bit_width = "+str(bit_width)
-        self.stochastic_rounding = stochastic_rounding
-        print "        stochastic_rounding = "+str(stochastic_rounding)     
+        self.prop_bit_width = prop_bit_width
+        print "        prop_bit_width = "+str(prop_bit_width)
+        self.prop_stochastic_rounding = prop_stochastic_rounding
+        print "        prop_stochastic_rounding = "+str(prop_stochastic_rounding)     
+        self.update_bit_width = update_bit_width
+        print "        update_bit_width = "+str(update_bit_width)
+        self.update_stochastic_rounding = update_stochastic_rounding
+        print "        update_stochastic_rounding = "+str(update_stochastic_rounding)   
         
         # self.threshold = 0.1* n_inputs
         
@@ -72,8 +74,8 @@ class linear_layer(object):
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
         self.high = np.float32(np.sqrt(6. / (n_inputs + n_units)))
+        # self.w0 = np.float32(high/2)
         # print self.high
-        # self.w0 = self.high/2
         
         W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
         # W_values = np.zeros((n_inputs, n_units),dtype=theano.config.floatX)
@@ -131,15 +133,16 @@ class linear_layer(object):
         # I could scale x or z instead of W 
         # and the dot product would become an accumulation
         # I am not doing it because it would mess up with Theano automatic differentiation.
-        if self.discrete == True:
-            W = discretize(self.W,self.high/np.float32(2))
+        if self.prop_bit_width is not None:
+            self.W_prop = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
+                stochastic=self.prop_stochastic_rounding,rng=self.rng)
             
         # continuous weights
         else:
-            W = self.W
+            self.W_prop = self.W
         
         # linear part
-        z =  T.dot(self.x, W)       
+        z =  T.dot(self.x, self.W_prop)       
         
         # for BN updates
         self.z = z
@@ -202,7 +205,7 @@ class linear_layer(object):
     def bprop(self, cost):
        
 
-        self.dEdW = T.grad(cost=cost, wrt=self.W)
+        self.dEdW = T.grad(cost=cost, wrt=self.W_prop)
         self.dEdb = T.grad(cost=cost, wrt=self.b)
         
         if self.BN == True:
@@ -255,16 +258,16 @@ class linear_layer(object):
         # new_W is either -w0 or w0        
         
         # saturation learning rule
-        if self.saturation is not None:
+        # if self.saturation is not None:
         
-            new_W = T.clip(new_W,-self.saturation,self.saturation)
+            # new_W = T.clip(new_W,-self.saturation,self.saturation)
             # new_W is in [-saturation,+saturation]
             
         # linear quantization
-        if self.bit_width is not None:
+        if self.update_bit_width is not None:
             
-            new_W = linear_quantization(x=new_W,bit_width=self.bit_width,min=-self.saturation,max=self.saturation,
-                stochastic=self.stochastic_rounding,rng=self.rng)
+            new_W = linear_quantization(x=new_W,bit_width=self.update_bit_width,min=-self.high,max=self.high,
+                stochastic=self.update_stochastic_rounding,rng=self.rng)
         
         updates.append((self.W, new_W))
         
@@ -281,8 +284,8 @@ class ReLU_layer(linear_layer):
         
     def activation(self,z):
     
-        return T.maximum(0.,z)
-        # return T.maximum(z*.01,z)
+        # return T.maximum(0.,z)
+        return T.maximum(z*.01,z)
         
         # Roland activation function
         # return T.ge(z,1.)*z
@@ -290,7 +293,8 @@ class ReLU_layer(linear_layer):
 class ReLU_conv_layer(linear_layer): 
     
     def __init__(self, rng, image_shape, zero_pad, filter_shape, filter_stride, pool_shape, pool_stride, output_shape, partial_sum, BN,
-        discrete=False, saturation=None, bit_width=None, stochastic_rounding=False):
+        prop_bit_width=None, prop_stochastic_rounding=False,
+        update_bit_width=None, update_stochastic_rounding=False):
         
         self.rng = rng
         
@@ -315,14 +319,14 @@ class ReLU_conv_layer(linear_layer):
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
         
-        self.discrete = discrete
-        print "        discrete = "+str(discrete)
-        self.saturation = saturation
-        print "        saturation = "+str(saturation)
-        self.bit_width = bit_width
-        print "        bit_width = "+str(bit_width)
-        self.stochastic_rounding = stochastic_rounding
-        print "        stochastic_rounding = "+str(stochastic_rounding)     
+        self.prop_bit_width = prop_bit_width
+        print "        prop_bit_width = "+str(prop_bit_width)
+        self.prop_stochastic_rounding = prop_stochastic_rounding
+        print "        prop_stochastic_rounding = "+str(prop_stochastic_rounding)     
+        self.update_bit_width = update_bit_width
+        print "        update_bit_width = "+str(update_bit_width)
+        self.update_stochastic_rounding = update_stochastic_rounding
+        print "        update_stochastic_rounding = "+str(update_stochastic_rounding)   
 
         # range of init
         n_inputs = np.prod(filter_shape[1:])
@@ -354,16 +358,17 @@ class ReLU_conv_layer(linear_layer):
         # x = x.reshape(self.image_shape)
         
         # discrete weights
-        if self.discrete == True:
-            W = discretize(self.W,self.high/np.float32(2))
+        if self.prop_bit_width is not None:
+            self.W_prop = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
+                stochastic=self.prop_stochastic_rounding,rng=self.rng)
             
         # continuous weights
         else:
-            W = self.W
+            self.W_prop = self.W
         
         # convolution
         x = x.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        W = W.dimshuffle(1, 2, 3, 0) # bc01 to c01b
+        W = self.W_prop.dimshuffle(1, 2, 3, 0) # bc01 to c01b
         conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
         x = gpu_contiguous(x)
         W = gpu_contiguous(W)
@@ -438,6 +443,6 @@ class ReLU_conv_layer(linear_layer):
         
     def activation(self,z):
     
-        return T.maximum(0.,z)
-        # return T.maximum(z*.01,z)
+        # return T.maximum(0.,z)
+        return T.maximum(z*.01,z)
         

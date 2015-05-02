@@ -1,3 +1,4 @@
+
 # Copyright 2014 Matthieu Courbariaux
 
 # This file is part of deep-learning-discrete.
@@ -25,37 +26,6 @@ import theano
 import theano.tensor as T
 import time
 
-# For the Discretization
-from theano.scalar.basic import UnaryScalarOp, BinaryScalarOp, upcast_out, same_out_nocomplex
-from theano.tensor.elemwise import Elemwise
-
-# The only reason I am implementing my own op is for the identity gradient
-class Discretize(BinaryScalarOp):
-    
-    # Is bprop discrete ?
-    
-    # In theory yes:
-    # z = W_d * x
-    # According to the chain rule, 
-    # Bprop is discrete for the inputs gradient:
-    # dEdx = dEdz * dzdx = dEdz * W_d
-    # However, it is not for the parameters gradient:
-    # dEdw = dEdz * dzd(W_d) * d(W_d)dW 
-    # The last term is identity, so:
-    # dEdw = dEdz * dzd((W_d)) = dEdz * x
-
-    # did experiments to check:
-    # multiply both W_lr_scale and W initialization by 10 -> no change on the results
-    # manual gradient instead of T.grad -> same results
-    
-    def c_code(self, node, name, (x, y), (z, ), sub):
-        return "%(z)s = %(y)s * (2*(%(x)s >= 0)-1);" % locals()
-
-    def grad(self, (x, y), (gz, )):
-        return gz, y.zeros_like().astype(theano.config.floatX)
-
-discretize = Elemwise(Discretize(upcast_out, name='discretize'))
-
 def stochastic_rounding(x, rng):
     
     p = x-T.floor(x)
@@ -82,7 +52,7 @@ def stochastic_rounding(x, rng):
 def linear_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None):
     
     # n is the number of possible values other than 0 (hence the -1)
-    n = -1 + 2**bit_width
+    n = T.cast(-1 + 2**bit_width,dtype=theano.config.floatX)
     
     # unfortunately, this part requires to have the whole matrix with high precision
     # As a result, I am not using it
@@ -91,7 +61,14 @@ def linear_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None)
     if max == None:
         max = T.max(x)
     
-    # should not be necessary but one never knows
+    # compute the quantization step
+    step = (max-min)/(2+n+1)
+    
+    # compute the new max and min after quantization
+    max = max - step
+    min = min + step
+    
+    # Clipping
     x = T.clip(x,min,max)
     # x is in [min,max]
     x = (x-min)/(max-min)
@@ -99,6 +76,7 @@ def linear_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None)
     x = x*n
     # x is in [0,n]
     
+    # rounding
     if stochastic == True:
         x = stochastic_rounding(x,rng)
     else: 

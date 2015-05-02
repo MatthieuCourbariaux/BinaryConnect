@@ -68,9 +68,9 @@ if __name__ == "__main__":
     test_set.X = test_set.X.reshape(10000,1,28,28)
     
     # zero padding, cost little may help Data Augmentation
-    train_set.X = _zero_pad(array=train_set.X, amount=2, axes=(2, 3))
-    valid_set.X = _zero_pad(array=valid_set.X, amount=2, axes=(2, 3))
-    test_set.X = _zero_pad(array=test_set.X, amount=2, axes=(2, 3))
+    # train_set.X = _zero_pad(array=train_set.X, amount=2, axes=(2, 3))
+    # valid_set.X = _zero_pad(array=valid_set.X, amount=2, axes=(2, 3))
+    # test_set.X = _zero_pad(array=test_set.X, amount=2, axes=(2, 3))
     
     # Onehot the targets
     train_set.y = np.float32(onehot(train_set.y))
@@ -91,21 +91,16 @@ if __name__ == "__main__":
     
     rng = np.random.RandomState(1234)
     batch_size = 64
+    # batch_size = 4096
     
     class MNIST_model(Network):
 
         def __init__(self, rng):
             
-            # discrete = True
-            discrete = False
-            saturation = None
-            # saturation = 2**-4
-            # saturation = 2**-9
-            # bit_width = 8
-            # bit_width = 1
-            bit_width = None
-            # stochastic_rounding = True
-            stochastic_rounding = False
+            prop_bit_width = 1
+            prop_stochastic_rounding = False # stochastic rounding does not seem to work at all for propagations
+            update_bit_width = 1
+            update_stochastic_rounding = True
             BN = True
             # BN = False
             
@@ -115,19 +110,21 @@ if __name__ == "__main__":
         
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, 1, 32, 32),
+                image_shape=(batch_size, 1, 28, 28),
+                # image_shape=(batch_size, 1, 32, 32),
                 zero_pad = 0, # add n zeros on both sides of the input
-                filter_shape=(32, 1, 12, 12),
+                # filter_shape=(32, 1, 12, 12),
+                filter_shape=(32, 1, 8, 8),
                 filter_stride = 1,
                 pool_shape=(4, 4),
                 pool_stride = 2,
                 output_shape = (batch_size, 32, 10, 10),
                 partial_sum=1, 
                 BN=BN,
-                discrete=discrete, 
-                saturation=saturation, 
-                bit_width=bit_width, 
-                stochastic_rounding=stochastic_rounding
+                prop_bit_width=prop_bit_width, 
+                prop_stochastic_rounding=prop_stochastic_rounding,
+                update_bit_width=update_bit_width, 
+                update_stochastic_rounding=update_stochastic_rounding
             ))
             
             print "    NiN layer:"
@@ -143,10 +140,10 @@ if __name__ == "__main__":
                 output_shape = (batch_size, 16, 10, 10),
                 partial_sum=1, 
                 BN=BN,
-                discrete=discrete, 
-                saturation=saturation, 
-                bit_width=bit_width, 
-                stochastic_rounding=stochastic_rounding
+                prop_bit_width=prop_bit_width, 
+                prop_stochastic_rounding=prop_stochastic_rounding,
+                update_bit_width=update_bit_width, 
+                update_stochastic_rounding=update_stochastic_rounding
             ))
 
             print "    Convolution layer 2:"
@@ -162,10 +159,10 @@ if __name__ == "__main__":
                 output_shape = (batch_size, 16, 4, 4),
                 partial_sum=1, 
                 BN=BN,
-                discrete=discrete, 
-                saturation=saturation, 
-                bit_width=bit_width, 
-                stochastic_rounding=stochastic_rounding
+                prop_bit_width=prop_bit_width, 
+                prop_stochastic_rounding=prop_stochastic_rounding,
+                update_bit_width=update_bit_width, 
+                update_stochastic_rounding=update_stochastic_rounding
             ))
             
             print "    Convolution layer 3:"
@@ -181,10 +178,10 @@ if __name__ == "__main__":
                 output_shape = (batch_size, 16, 3, 3),
                 partial_sum=1, 
                 BN=BN,
-                discrete=discrete, 
-                saturation=saturation, 
-                bit_width=bit_width, 
-                stochastic_rounding=stochastic_rounding
+                prop_bit_width=prop_bit_width, 
+                prop_stochastic_rounding=prop_stochastic_rounding,
+                update_bit_width=update_bit_width, 
+                update_stochastic_rounding=update_stochastic_rounding
             ))
             
             print "    L2 SVM layer:"
@@ -194,21 +191,26 @@ if __name__ == "__main__":
                 n_inputs= 16*3*3, 
                 n_units = 10, 
                 BN=BN,
-                discrete=discrete, 
-                saturation=saturation, 
-                bit_width=bit_width, 
-                stochastic_rounding=stochastic_rounding
+                prop_bit_width=prop_bit_width, 
+                prop_stochastic_rounding=prop_stochastic_rounding,
+                update_bit_width=update_bit_width, 
+                update_stochastic_rounding=update_stochastic_rounding
             ))
             
     model = MNIST_model(rng = rng)
     
     print 'Creating the trainer'
     
-    LR = .3
+    LR = .1
     gpu_batches = 50000/batch_size
+    
     n_epoch = 1000
     monitor_step = 2
     LR_decay = .99
+    
+    # n_epoch = 5000
+    # monitor_step = 1000
+    # LR_decay = .9995
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
