@@ -62,11 +62,11 @@ def linear_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None)
         max = T.max(x)
     
     # compute the quantization step
-    step = (max-min)/(2+n+1)
+    step = (max-min)/(n+1)
     
     # compute the new max and min after quantization
-    max = max - step
-    min = min + step
+    max = max - step/2
+    min = min + step/2
     
     # Clipping
     x = T.clip(x,min,max)
