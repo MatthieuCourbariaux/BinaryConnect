@@ -46,6 +46,22 @@ def stochastic_rounding(x, rng):
     
     return x
 
+# using elementwise op on x is very slow...
+def binarize(x):
+    
+    x0 = T.mean(abs(x))
+    x = x0 * (2.*T.ge(x,0.)-1.)
+
+    # mean
+    # mean = T.mean(x)
+    # mean of the samples above the mean
+    # high = T.sum(x*T.ge(x,mean))/T.cast(T.sum(T.ge(x,mean)),dtype=theano.config.floatX)
+    # mean of the samples below the mean
+    # low = T.sum(x*T.lt(x,mean))/T.cast(T.sum(T.lt(x,mean)),dtype=theano.config.floatX)
+    # x = high*T.ge(x,mean) + low*T.lt(x,mean)
+    
+    return x
+    
 # unlike fixed point:
 # min and max are not the same power of 2,
 # sign is counted in the bit_width
@@ -65,6 +81,7 @@ def linear_quantization(x,bit_width,min=None,max=None,stochastic=False,rng=None)
     step = (max-min)/(n+1)
     
     # compute the new max and min after quantization
+    # idea is to reduce the variance of the quantization noise
     max = max - step/2
     min = min + step/2
     

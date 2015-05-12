@@ -99,10 +99,11 @@ if __name__ == "__main__":
             
             prop_bit_width = 1
             prop_stochastic_rounding = False # stochastic rounding does not seem to work at all for propagations
-            update_bit_width = 1
+            update_bit_width = None
+            # update_bit_width = 1
             update_stochastic_rounding = True
-            BN = True
-            # BN = False
+            # BN = True
+            BN = False
             
             Network.__init__(self, n_hidden_layer = 4) 
             
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .1
+    LR = .01
     gpu_batches = 50000/batch_size
     
     n_epoch = 1000

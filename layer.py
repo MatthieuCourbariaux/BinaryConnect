@@ -33,11 +33,12 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from format import linear_quantization
+from format import linear_quantization, binarize
 
 class linear_layer(object):
     
     def __init__(self, rng, n_inputs, n_units, BN=False,
+        max_col_norm = None, saturation = None,
         prop_bit_width=None, prop_stochastic_rounding=False,
         update_bit_width=None, update_stochastic_rounding=False):
         
@@ -51,6 +52,11 @@ class linear_layer(object):
         print "        BN = "+str(BN)
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
+        
+        self.max_col_norm = max_col_norm
+        print "        max_col_norm = "+str(max_col_norm)
+        self.saturation = saturation
+        print "        saturation = "+str(saturation)
         
         self.prop_bit_width = prop_bit_width
         print "        prop_bit_width = "+str(prop_bit_width)
@@ -101,6 +107,10 @@ class linear_layer(object):
         self.var = theano.shared(value=b_values, name='var')
         self.sum = theano.shared(value=b_values, name='sum')
         self.sum2 = theano.shared(value=b_values, name='sum2')
+        
+        # momentum
+        self.update_W = theano.shared(value=np.zeros((n_inputs, n_units), dtype=theano.config.floatX), name='update_W')
+        self.update_b = theano.shared(value=b_values, name='update_b')
     
     def activation(self, z):
         return z
@@ -134,12 +144,22 @@ class linear_layer(object):
         # and the dot product would become an accumulation
         # I am not doing it because it would mess up with Theano automatic differentiation.
         if self.prop_bit_width is not None:
+            
             self.W_prop = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
-                stochastic=self.prop_stochastic_rounding,rng=self.rng)
+                stochastic=self.prop_stochastic_rounding,rng=self.rng)  
+                
+            # self.W_prop = linear_quantization(x=self.W,bit_width=self.prop_bit_width,
+                # stochastic=self.prop_stochastic_rounding,rng=self.rng)
+                
+            # self.W_prop = binarize(self.W)
+            
+            # self.W_prop = self.high * (T.ge(self.W,0.)-.5)
             
         # continuous weights
         else:
             self.W_prop = self.W
+            
+        # self.W_prop = self.high * (T.ge(self.W,0.)-.5)
         
         # linear part
         z =  T.dot(self.x, self.W_prop)       
@@ -211,7 +231,7 @@ class linear_layer(object):
         if self.BN == True:
             self.dEda = T.grad(cost=cost, wrt=self.a)
         
-    def parameters_updates(self, LR):    
+    def parameters_updates(self, LR, M):    
         
         updates = []
         
@@ -235,9 +255,17 @@ class linear_layer(object):
         # new_W = self.W - LR / (self.W_scale ** 2) * self.dEdW 
         # new_W = self.W - LR / self.W_scale * self.dEdW 
 
+        # compute updates
+        new_update_W = M * self.update_W - LR * self.dEdW
+        new_update_b = M * self.update_b - LR * self.dEdb
+        
+        # compute new parameters. Note that we use a better precision than the other operations
+        new_W = self.W + new_update_W
+        new_b = self.b + new_update_b
+        
         # classic update
         # new_W = self.W - LR * self.W_lr_scale * self.dEdW 
-        new_W = self.W - LR * self.dEdW 
+        # new_W = self.W - LR * self.dEdW 
         
         # discretization + stochastic rounding
         # new_W = T.clip(new_W,-self.w0,self.w0)
@@ -258,11 +286,27 @@ class linear_layer(object):
         # new_W is either -w0 or w0        
         
         # saturation learning rule
-        # if self.saturation is not None:
-        
-            # new_W = T.clip(new_W,-self.saturation,self.saturation)
-            # new_W is in [-saturation,+saturation]
+        if self.saturation is not None:
             
+            high = np.float32(self.saturation*self.high)
+            new_W = T.clip(new_W,-high,high) 
+            
+            # new_W = T.clip(new_W,-self.saturation,self.saturation)
+            
+            # new_W = T.clip(new_W,-self.high,self.high)
+        
+        # TODO: does it work with CNN ?
+        # L2 column constraint on W
+        if self.max_col_norm is not None:
+            col_norms = T.sqrt(T.sum(T.sqr(new_W), axis=0))
+            # col_norms = T.max(new_W, axis=0)
+            desired_norms = T.clip(col_norms, 0, self.max_col_norm) # clip = saturate below min and beyond max
+            new_W = new_W * (desired_norms / (1e-7 + col_norms))
+        
+        # if self.saturation == True :
+            # print "OK"
+            # new_W = T.clip(new_W,-self.high,self.high)
+        
         # linear quantization
         if self.update_bit_width is not None:
             
@@ -270,9 +314,9 @@ class linear_layer(object):
                 stochastic=self.update_stochastic_rounding,rng=self.rng)
         
         updates.append((self.W, new_W))
-        
-        new_b = self.b - LR * self.dEdb
         updates.append((self.b, new_b))
+        updates.append((self.update_W, new_update_W))
+        updates.append((self.update_b, new_update_b)) 
         
         if self.BN == True:
             new_a = self.a - LR * self.dEda

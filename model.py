@@ -82,15 +82,15 @@ class Network(object):
         return updates
     
     # you give it the input and the target and it gives you the updates
-    def parameters_updates(self, x, t, LR):
+    def parameters_updates(self, x, t, LR, M):
         
         y = self.fprop(x=x,can_fit=True)        
         self.bprop(y, t)
         
         # updates
-        updates = self.layer[0].parameters_updates(LR)
+        updates = self.layer[0].parameters_updates(LR, M)
         for k in range(1,self.n_hidden_layers+1):
-            updates = updates + self.layer[k].parameters_updates(LR)
+            updates = updates + self.layer[k].parameters_updates(LR, M)
         
         return updates
     

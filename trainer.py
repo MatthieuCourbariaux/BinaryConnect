@@ -43,6 +43,7 @@ class Trainer(object):
             train_set, valid_set, test_set,
             model,
             LR, LR_decay, LR_fin,
+            M,
             batch_size, gpu_batches,
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
@@ -51,6 +52,7 @@ class Trainer(object):
         print '    Learning rate = %f' %(LR)
         print '    Learning rate decay = %f' %(LR_decay)
         print '    Final learning rate = %f' %(LR_fin)
+        print '    Momentum = %f' %(M)
         print '    Batch size = %i' %(batch_size)
         print '    gpu_batches = %i' %(gpu_batches)
         print '    Number of epochs = %i' %(n_epoch)
@@ -76,6 +78,7 @@ class Trainer(object):
         
         # save the parameters
         self.LR = LR
+        self.M = M
         self.LR_decay = LR_decay
         self.LR_fin = LR_fin
         self.batch_size = batch_size
@@ -165,7 +168,8 @@ class Trainer(object):
             self.train_set = self.shuffle(self.train_set)
             
         # data augmentation
-        self.DA_train_set = self.affine_transformations(self.train_set)
+        # self.DA_train_set = self.affine_transformations(self.train_set)
+        self.DA_train_set = self.train_set
         
         self.epoch += self.step
         
@@ -231,7 +235,7 @@ class Trainer(object):
             
             for j in shuffled_range_j:  
 
-                self.train_batch(j, self.LR)
+                self.train_batch(j, self.LR, self.M)
         
         # load the last incomplete gpu batch of batches
         if n_remaining_batches > 0:
@@ -246,7 +250,7 @@ class Trainer(object):
             
             for j in shuffled_range_j: 
 
-                self.train_batch(j, self.LR)
+                self.train_batch(j, self.LR, self.M)
     
     # batch normalization function
     def set_mean_var(self, set):
@@ -328,6 +332,7 @@ class Trainer(object):
     
         print '    epoch %i:' %(self.epoch)
         print '        learning rate %f' %(self.LR)
+        print '        momentum %f' %(self.M)
         print '        validation error rate %f%%' %(self.validation_ER)
         print '        test error rate %f%%' %(self.test_ER)
         print '        epoch associated to best validation error %i' %(self.best_epoch)
@@ -353,11 +358,12 @@ class Trainer(object):
         index = T.lscalar('index') 
         n_samples = T.lscalar('n_samples') 
         LR = T.scalar('LR', dtype=theano.config.floatX)
+        M = T.scalar('M', dtype=theano.config.floatX)
 
         # before the build, you work with symbolic variables
         # after the build, you work with numeric variables
         
-        self.train_batch = theano.function(inputs=[index,LR], updates=self.model.parameters_updates(x,y,LR),givens={ 
+        self.train_batch = theano.function(inputs=[index,LR,M], updates=self.model.parameters_updates(x,y,LR,M),givens={ 
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
                 y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "train_batch", on_unused_input='warn')
