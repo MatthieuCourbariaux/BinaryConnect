@@ -91,7 +91,7 @@ if __name__ == "__main__":
     
     rng = np.random.RandomState(1234)
     # batch_size = 100
-    batch_size = 128
+    batch_size = 64
     # batch_size = 4096
     
     class PI_MNIST_model(Network):
@@ -102,7 +102,7 @@ if __name__ == "__main__":
             
             prop_bit_width=1
             # prop_bit_width=None
-            prop_stochastic_rounding=False
+            prop_stochastic_rounding=True
             update_bit_width=None
             update_stochastic_rounding=False
             
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             # max_col_norm = 2.
             # saturation = .25
             saturation = None
-            BN = False
+            BN = True
             
             Network.__init__(self, n_hidden_layer = 3) 
             
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .3
+    LR = 1. 
     gpu_batches = 50000/batch_size
     
     n_epoch = 1000
@@ -176,8 +176,12 @@ if __name__ == "__main__":
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
     
-    # print 'Display weights'
+    # W = model.layer[1].W.get_value()
+    # import pickle
+    # pickle.dump( W, open( "W.pkl", "wb" ) )
     
+    # print 'Display weights'
+
     # W = 2.* (np.transpose(model.layer[0].W.get_value())>=0.) - 1.
     # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
     # plt.imshow(W, cmap = cm.Greys_r)

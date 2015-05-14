@@ -33,7 +33,7 @@ from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from format import linear_quantization, binarize
+from format import linear_quantization, binarize, tanh
 
 class linear_layer(object):
     
@@ -80,7 +80,7 @@ class linear_layer(object):
         # W_values = self.high * np.asarray(self.rng.binomial(n=1, p=.5, size=(n_inputs, n_units)),dtype=theano.config.floatX) - self.high/2.
         
         self.high = np.float32(np.sqrt(6. / (n_inputs + n_units)))
-        # self.w0 = np.float32(high/2)
+        self.W0 = np.float32(self.high/2)
         # print self.high
         
         W_values = np.asarray(self.rng.uniform(low=-self.high,high=self.high,size=(n_inputs, n_units)),dtype=theano.config.floatX)
@@ -115,54 +115,62 @@ class linear_layer(object):
     def activation(self, z):
         return z
     
-    def fprop(self, x, can_fit):
+    def fprop(self, x, can_fit, eval):
         
-        # self.W_prop = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
+        # self.Wb = T.cast(self.high * (T.ge(self.W,0.)-T.lt(self.W,0.)), theano.config.floatX)
         
         # weights are either 1, either -1 -> propagating = sum and sub
         # And scaling down weights to normal values
-        # self.W_prop = self.W_scale * (2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.)
-        # self.W_prop = self.W_scale * discretize(self.W)
+        # self.Wb = self.W_scale * (2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.)
+        # self.Wb = self.W_scale * discretize(self.W)
         
         # weights are either 1, either -1, either 0 -> propagating = sum and sub
         # results are not better, maybe worse (it requires more bits for integer part of fxp)
-        # self.W_prop = T.cast(T.ge(self.W,.5)-T.le(self.W,-.5), theano.config.floatX)
+        # self.Wb = T.cast(T.ge(self.W,.5)-T.le(self.W,-.5), theano.config.floatX)
         
         # 2.* T.cast(T.ge(self.W,0.), theano.config.floatX) - 1.
         
         # weights are either 1, either 0 -> propagating = sums
-        # self.W_prop = T.cast(T.ge(self.W,.5), theano.config.floatX)
+        # self.Wb = T.cast(T.ge(self.W,.5), theano.config.floatX)
         
         # shape the input as a matrix (batch_size, n_inputs)
         self.x = x.flatten(2)
         
         # weighted sum
-        # z = T.dot(self.x, self.W_prop)
+        # z = T.dot(self.x, self.Wb)
+        
+        if eval == False:
+            self.Wb = self.W0 * tanh(self.W/self.W0,binary=self.prop_bit_width,stochastic=self.prop_stochastic_rounding,rng=self.rng)
+        else:
+            self.Wb = self.W0 * tanh(self.W/self.W0)
+            
+        z =  T.dot(self.x, self.Wb)
         
         # discrete weights
         # I could scale x or z instead of W 
         # and the dot product would become an accumulation
         # I am not doing it because it would mess up with Theano automatic differentiation.
-        if self.prop_bit_width is not None:
+        # if self.prop_bit_width is not None:
             
-            self.W_prop = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
-                stochastic=self.prop_stochastic_rounding,rng=self.rng)  
+            # self.Wb = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
+                # stochastic=self.prop_stochastic_rounding,rng=self.rng)  
                 
-            # self.W_prop = linear_quantization(x=self.W,bit_width=self.prop_bit_width,
+            # self.Wb = linear_quantization(x=self.W,bit_width=self.prop_bit_width,
                 # stochastic=self.prop_stochastic_rounding,rng=self.rng)
                 
-            # self.W_prop = binarize(self.W)
+            # self.Wb = binarize(self.W)
+            # self.Wb = binary(self.W,stochastic=self.prop_stochastic_rounding,rng=self.rng)
             
-            # self.W_prop = self.high * (T.ge(self.W,0.)-.5)
+            # self.Wb = binary(self.W,np.float32(self.high/2),stochastic=self.prop_stochastic_rounding,rng=self.rng)
+            # z =  T.dot(self.x, self.Wb)
+            
+            # self.Wb = self.high * (T.ge(self.W,0.)-.5)
             
         # continuous weights
-        else:
-            self.W_prop = self.W
+        # else:
+            # z =  T.dot(self.x, self.W)
             
-        # self.W_prop = self.high * (T.ge(self.W,0.)-.5)
-        
-        # linear part
-        z =  T.dot(self.x, self.W_prop)       
+        # self.Wb = self.high * (T.ge(self.W,0.)-.5)               
         
         # for BN updates
         self.z = z
@@ -223,9 +231,15 @@ class linear_layer(object):
         return updates
         
     def bprop(self, cost):
-       
-
-        self.dEdW = T.grad(cost=cost, wrt=self.W_prop)
+        
+        # tanh derivative...
+        # I have to do that manually because of the rounding
+        dEdWb = T.grad(cost=cost, wrt=self.Wb)
+        dWbdW = 1 - self.Wb**2
+        self.dEdW = dWbdW*dEdWb
+        
+        # self.dEdW = T.grad(cost=cost, wrt=self.Wb)
+        
         self.dEdb = T.grad(cost=cost, wrt=self.b)
         
         if self.BN == True:
@@ -251,7 +265,7 @@ class linear_layer(object):
         # new_W = T.cast(T.clip(self.W - (T.ge(self.dEdW,comp) - T.ge(-self.dEdW,comp)),-.5,.5), theano.config.floatX)
         
         # updating and scaling up gradient to 0 and ones
-        # new_W = self.W - LR * self.dEdW_prop / self.W_scale
+        # new_W = self.W - LR * self.dEdWb / self.W_scale
         # new_W = self.W - LR / (self.W_scale ** 2) * self.dEdW 
         # new_W = self.W - LR / self.W_scale * self.dEdW 
 
@@ -261,7 +275,7 @@ class linear_layer(object):
         
         # compute new parameters. Note that we use a better precision than the other operations
         new_W = self.W + new_update_W
-        new_b = self.b + new_update_b
+        neWb = self.b + new_update_b
         
         # classic update
         # new_W = self.W - LR * self.W_lr_scale * self.dEdW 
@@ -314,7 +328,7 @@ class linear_layer(object):
                 stochastic=self.update_stochastic_rounding,rng=self.rng)
         
         updates.append((self.W, new_W))
-        updates.append((self.b, new_b))
+        updates.append((self.b, neWb))
         updates.append((self.update_W, new_update_W))
         updates.append((self.update_b, new_update_b)) 
         
@@ -403,16 +417,16 @@ class ReLU_conv_layer(linear_layer):
         
         # discrete weights
         if self.prop_bit_width is not None:
-            self.W_prop = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
+            self.Wb = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
                 stochastic=self.prop_stochastic_rounding,rng=self.rng)
             
         # continuous weights
         else:
-            self.W_prop = self.W
+            self.Wb = self.W
         
         # convolution
         x = x.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        W = self.W_prop.dimshuffle(1, 2, 3, 0) # bc01 to c01b
+        W = self.Wb.dimshuffle(1, 2, 3, 0) # bc01 to c01b
         conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
         x = gpu_contiguous(x)
         W = gpu_contiguous(W)

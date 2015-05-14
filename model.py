@@ -33,12 +33,12 @@ class Network(object):
         
         self.n_hidden_layers = n_hidden_layer
     
-    def fprop(self, x, can_fit):
+    def fprop(self, x, can_fit, eval):
     
-        y = self.layer[0].fprop(x, can_fit)
+        y = self.layer[0].fprop(x, can_fit, eval)
         
         for k in range(1,self.n_hidden_layers+1):
-            y = self.layer[k].fprop(y, can_fit)
+            y = self.layer[k].fprop(y, can_fit, eval)
         
         return y
 
@@ -65,7 +65,7 @@ class Network(object):
 
     def BN_updates_1(self,x):
         
-        y = self.fprop(x=x,can_fit=True) 
+        y = self.fprop(x=x,can_fit=True,eval=True) 
         
         updates = self.layer[0].BN_updates_1()
         for k in range(1,self.n_hidden_layers+1):
@@ -84,7 +84,7 @@ class Network(object):
     # you give it the input and the target and it gives you the updates
     def parameters_updates(self, x, t, LR, M):
         
-        y = self.fprop(x=x,can_fit=True)        
+        y = self.fprop(x=x,can_fit=True,eval=False)        
         self.bprop(y, t)
         
         # updates
@@ -96,7 +96,7 @@ class Network(object):
     
     def errors(self, x, t):
         
-        y = self.fprop(x=x,can_fit=False)
+        y = self.fprop(x=x,can_fit=False,eval=True)
         # z = self.layer[self.n_hidden_layers].z
         
         # error function
@@ -116,6 +116,7 @@ class Network(object):
 
             # print "        layer "+str(k)+" weights max abs = "+str(np.max(np.abs(W)))   
             print "        layer "+str(k)+" weights mean abs = "+str(np.mean(np.abs(W)))   
+            # print "        layer "+str(k)+" weights = "+str(W)  
             
             # print "         Layer "+str(k)+":"
             # print "             Weights abs max = "+str(np.max(np.abs(W)))

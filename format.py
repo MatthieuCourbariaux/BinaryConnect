@@ -30,8 +30,6 @@ def stochastic_rounding(x, rng):
     
     p = x-T.floor(x)
     
-    theano.sandbox.rng_mrg.MRG_RandomStreams
-    
     # much slower :(
     # srng = T.shared_randomstreams.RandomStreams(rng.randint(999999))
     
@@ -46,6 +44,39 @@ def stochastic_rounding(x, rng):
     
     return x
 
+def tanh(x,binary=False,stochastic=False,rng=None):
+    
+    # x0 = T.mean(abs(x))
+
+    # can be seen as a hard tanh
+    # [?,?] to -1 or 1
+    # x = x0 * T.sgn(x)
+    
+    # [?,?] to [-1,1]
+    x = T.tanh(x)
+    
+    # btw, I believe 2*sigmoid(x)-1 = tanh(x/2)
+    # x = T.nnet.sigmoid(x/x0)
+    # x = T.nnet.ultra_fast_sigmoid(x/x0)
+    
+    # Quantization noise
+    if binary == True:
+        
+        # [-1,1] to [0,1]
+        x = (x + 1.)*.5
+        
+        # rounding
+        # [0,1] to 0 or 1
+        if stochastic == True:
+            x = stochastic_rounding(x,rng)
+        else:
+            x = T.round(x)
+            
+        # 0 or 1 to -1 or 1
+        x = 2. * x -1.
+    
+    return x 
+    
 # using elementwise op on x is very slow...
 def binarize(x):
     
