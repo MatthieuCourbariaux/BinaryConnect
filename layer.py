@@ -139,17 +139,28 @@ class linear_layer(object):
         # weighted sum
         # z = T.dot(self.x, self.Wb)
         
-        if eval == False:
-            self.Wb = self.W0 * tanh(self.W/self.W0,binary=self.prop_bit_width,stochastic=self.prop_stochastic_rounding,rng=self.rng)
-        else:
-            self.Wb = self.W0 * tanh(self.W/self.W0)
-            
-        z =  T.dot(self.x, self.Wb)
+        # if self.tanh = True:
         
-        # discrete weights
+            # self.Wt = self.W0 * tanh(self.W/self.W0)        
+        
+        # Binary weights
         # I could scale x or z instead of W 
         # and the dot product would become an accumulation
-        # I am not doing it because it would mess up with Theano automatic differentiation.
+        # I am not doing it for code clarity
+        if self.prop_bit_width == True:
+            
+            if eval == False: 
+                self.Wb = self.W0 * tanh(self.W/self.W0,binary=self.prop_bit_width,stochastic=self.prop_stochastic_rounding,rng=self.rng)
+            else:
+                self.Wb = self.W0 * tanh(self.W/self.W0)
+            
+            # self.Wb = self.W0 * T.tanh(self.W/self.W0)
+            z =  T.dot(self.x, self.Wb)
+            
+        # continuous weights
+        else:
+            z =  T.dot(self.x, self.W)
+            
         # if self.prop_bit_width is not None:
             
             # self.Wb = linear_quantization(x=self.W,bit_width=self.prop_bit_width,min=-self.high,max=self.high,
@@ -165,10 +176,6 @@ class linear_layer(object):
             # z =  T.dot(self.x, self.Wb)
             
             # self.Wb = self.high * (T.ge(self.W,0.)-.5)
-            
-        # continuous weights
-        # else:
-            # z =  T.dot(self.x, self.W)
             
         # self.Wb = self.high * (T.ge(self.W,0.)-.5)               
         
@@ -194,51 +201,20 @@ class linear_layer(object):
         y = self.activation(z)
         
         return y
-        
-    def BN_updates_1(self):
-        
-        updates = []
-        
-        if self.BN == True:
-        
-            updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
-            updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
-        
-        return updates
-        
-    def BN_updates_2(self,n_samples):
-        
-        updates = []
-        
-        if self.BN == True:
-        
-            # reset the sums
-            updates.append((self.sum, 0.* self.sum))
-            updates.append((self.sum2, 0.* self.sum2))
-            
-            # for the GPU
-            n_samples = T.cast(n_samples,dtype=theano.config.floatX)
-            
-            # compute the mean and variance
-            mean = self.sum/n_samples
-            mean2 = self.sum2/n_samples
-            
-            updates.append((self.mean, mean))
-            
-            # variance = mean(x^2) - mean(x)^2
-            updates.append((self.var, mean2 - mean**2))
-        
-        return updates
-        
+    
     def bprop(self, cost):
         
         # tanh derivative...
-        # I have to do that manually because of the rounding
-        dEdWb = T.grad(cost=cost, wrt=self.Wb)
-        dWbdW = 1 - self.Wb**2
-        self.dEdW = dWbdW*dEdWb
+        # I have to do that manually because of rounding ops
+        if self.prop_bit_width == True:
+            dEdWb = T.grad(cost=cost, wrt=self.Wb)
+            # cannot use Wb because Wb is either +-W0
+            # dWbdW = 1 - (self.Wb/self.W0)**2
+            dWbdW = 1 - T.tanh(self.W/self.W0)**2
+            self.dEdW = dWbdW*dEdWb
         
-        # self.dEdW = T.grad(cost=cost, wrt=self.Wb)
+        else:
+            self.dEdW = T.grad(cost=cost, wrt=self.W)
         
         self.dEdb = T.grad(cost=cost, wrt=self.b)
         
@@ -336,6 +312,41 @@ class linear_layer(object):
             new_a = self.a - LR * self.dEda
             updates.append((self.a, new_a))
 
+        return updates
+    
+    def BN_updates_1(self):
+        
+        updates = []
+        
+        if self.BN == True:
+        
+            updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
+            updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
+        
+        return updates
+        
+    def BN_updates_2(self,n_samples):
+        
+        updates = []
+        
+        if self.BN == True:
+        
+            # reset the sums
+            updates.append((self.sum, 0.* self.sum))
+            updates.append((self.sum2, 0.* self.sum2))
+            
+            # for the GPU
+            n_samples = T.cast(n_samples,dtype=theano.config.floatX)
+            
+            # compute the mean and variance
+            mean = self.sum/n_samples
+            mean2 = self.sum2/n_samples
+            
+            updates.append((self.mean, mean))
+            
+            # variance = mean(x^2) - mean(x)^2
+            updates.append((self.var, mean2 - mean**2))
+        
         return updates
 
 class ReLU_layer(linear_layer):

@@ -99,10 +99,10 @@ if __name__ == "__main__":
         def __init__(self, rng):
             
             n_units = 1024
+            prop_bit_width=True
+            prop_stochastic_rounding=False
+            BN = True
             
-            prop_bit_width=1
-            # prop_bit_width=None
-            prop_stochastic_rounding=True
             update_bit_width=None
             update_stochastic_rounding=False
             
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             # max_col_norm = 2.
             # saturation = .25
             saturation = None
-            BN = True
+
             
             Network.__init__(self, n_hidden_layer = 3) 
             
