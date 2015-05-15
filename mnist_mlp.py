@@ -30,10 +30,6 @@ from layer import linear_layer, ReLU_layer, ReLU_conv_layer
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
 from pylearn2.train_extensions.window_flip import _zero_pad
-
-# import matplotlib.pyplot as plt
-# import matplotlib.cm as cm
-# from filter_plot import tile_raster_images
           
 def onehot(x,numclasses=None):
 
@@ -90,71 +86,45 @@ if __name__ == "__main__":
     print 'Creating the model'
     
     rng = np.random.RandomState(1234)
-    # batch_size = 100
     batch_size = 64
-    # batch_size = 4096
     
     class PI_MNIST_model(Network):
 
         def __init__(self, rng):
             
             n_units = 1024
-            prop_bit_width=True
-            prop_stochastic_rounding=False
             BN = True
-            
-            update_bit_width=None
-            update_stochastic_rounding=False
-            
-            max_col_norm = None
-            # max_col_norm = 2.
-            # saturation = .25
-            saturation = None
-
+            binary=True
+            stochastic=False
             
             Network.__init__(self, n_hidden_layer = 3) 
             
             print "    Fully connected layer 1:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN, 
-                max_col_norm = max_col_norm, saturation = saturation,
-                prop_bit_width=prop_bit_width, prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, update_stochastic_rounding=update_stochastic_rounding))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN,
+                binary=binary, stochastic=stochastic))
                 
             print "    Fully connected layer 2:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, 
-                max_col_norm = max_col_norm, saturation = saturation,
-                prop_bit_width=prop_bit_width, prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, update_stochastic_rounding=update_stochastic_rounding))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN,
+                binary=binary, stochastic=stochastic))
                 
             print "    Fully connected layer 3:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, 
-                max_col_norm = max_col_norm, saturation = saturation,
-                prop_bit_width=prop_bit_width, prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, update_stochastic_rounding=update_stochastic_rounding))
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN,
+                binary=binary, stochastic=stochastic))
                 
             print "    L2 SVM layer:"
-            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = 10, BN = BN, 
-                max_col_norm = max_col_norm, saturation = saturation,
-                prop_bit_width=prop_bit_width, prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, update_stochastic_rounding=update_stochastic_rounding))
+            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = 10, BN = BN,
+                binary=binary, stochastic=stochastic))
     
     model = PI_MNIST_model(rng = rng)
     
     print 'Creating the trainer'
     
-    LR = 1. 
+    LR = 1.
+    M= .0
     gpu_batches = 50000/batch_size
-    
     n_epoch = 1000
     monitor_step = 3
     LR_decay = .99
-    # LR_decay = 1.
-    
-    M= .0
-    
-    # n_epoch = 5000
-    # monitor_step = 1000
-    # LR_decay = .9995
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
@@ -176,12 +146,18 @@ if __name__ == "__main__":
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
     
+    # print 'Save first hidden layer weights'
+    
     # W = model.layer[1].W.get_value()
     # import pickle
     # pickle.dump( W, open( "W.pkl", "wb" ) )
     
     # print 'Display weights'
-
+    
+    # import matplotlib.pyplot as plt
+    # import matplotlib.cm as cm
+    # from filter_plot import tile_raster_images
+    
     # W = 2.* (np.transpose(model.layer[0].W.get_value())>=0.) - 1.
     # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
     # plt.imshow(W, cmap = cm.Greys_r)
