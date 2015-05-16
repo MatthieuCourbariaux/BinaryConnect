@@ -1,20 +1,20 @@
 
-# Copyright 2014 Matthieu Courbariaux
+# Copyright 2015 Matthieu Courbariaux
 
-# This file is part of deep-learning-discrete.
+# This file is part of BinaryConnect.
 
-# deep-learning-discrete is free software: you can redistribute it and/or modify
+# BinaryConnect is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-# deep-learning-discrete is distributed in the hope that it will be useful,
+# BinaryConnect is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with deep-learning-discrete.  If not, see <http://www.gnu.org/licenses/>.
+# along with BinaryConnect.  If not, see <http://www.gnu.org/licenses/>.
 
 import gzip
 import cPickle

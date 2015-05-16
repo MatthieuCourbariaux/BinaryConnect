@@ -1,19 +1,19 @@
-# Copyright 2014 Matthieu Courbariaux
+# Copyright 2015 Matthieu Courbariaux
 
-# This file is part of deep-learning-discrete.
+# This file is part of BinaryConnect.
 
-# deep-learning-discrete is free software: you can redistribute it and/or modify
+# BinaryConnect is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-# deep-learning-discrete is distributed in the hope that it will be useful,
+# BinaryConnect is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with deep-learning-discrete.  If not, see <http://www.gnu.org/licenses/>.
+# along with BinaryConnect.  If not, see <http://www.gnu.org/licenses/>.
 
 import gzip
 import cPickle
@@ -93,9 +93,9 @@ if __name__ == "__main__":
         def __init__(self, rng):
             
             n_units = 1024
-            BN = True
+            BN = False
             binary=True
-            stochastic=False
+            stochastic=True
             
             Network.__init__(self, n_hidden_layer = 3) 
             
@@ -111,6 +111,10 @@ if __name__ == "__main__":
             self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN,
                 binary=binary, stochastic=stochastic))
                 
+            # print "    Fully connected layer 4:"
+            # self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN,
+                # binary=binary, stochastic=stochastic))
+                
             print "    L2 SVM layer:"
             self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = 10, BN = BN,
                 binary=binary, stochastic=stochastic))
@@ -119,12 +123,12 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = 1.
+    LR = .1
     M= .0
     gpu_batches = 50000/batch_size
-    n_epoch = 1000
+    n_epoch = 9
     monitor_step = 3
-    LR_decay = .99
+    LR_decay = .995
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
