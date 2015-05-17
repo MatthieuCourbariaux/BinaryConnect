@@ -99,8 +99,8 @@ if __name__ == "__main__":
             # whether quantization is deterministic or stochastic
             stochastic_training=True
             
-            binary_test=False
-            stochastic_test=False
+            binary_test=True
+            stochastic_test=True
             samples_test = 1
             
             Network.__init__(self, n_hidden_layer = 3, BN = BN, samples_test = samples_test) 
@@ -132,13 +132,13 @@ if __name__ == "__main__":
     LR = .3
     M= .0
     gpu_batches = 50000/batch_size
-    n_epoch = 1000
+    n_epoch = 0
     monitor_step = 3
     LR_decay = .99
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model, load_path = None, save_path = "best_mlp3.pkl",
+        model = model, load_path = "best_mlp2.pkl", save_path = None,
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         M = M,
         batch_size = batch_size, gpu_batches = gpu_batches,

@@ -41,9 +41,9 @@ class Trainer(object):
     def __init__(self,
             rng,
             train_set, valid_set, test_set,
-            model,
+            model, save_path, load_path,
             LR, LR_decay, LR_fin,
-            M,
+            M, 
             batch_size, gpu_batches,
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
@@ -75,6 +75,8 @@ class Trainer(object):
         
         # save the model
         self.model = model
+        self.load_path = load_path
+        self.save_path = save_path
         
         # save the parameters
         self.LR = LR
@@ -142,11 +144,14 @@ class Trainer(object):
         
     def init(self):
         
+        if self.load_path != None:
+            self.model.load_params_file(self.load_path)
+        
         self.epoch = 0
         self.best_epoch = self.epoch
         
         # set the mean and variance for BN
-        self.set_mean_var(self.train_set)
+        self.set_mean_var(self.train_set) 
         
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)
@@ -183,6 +188,7 @@ class Trainer(object):
         
         # set the mean and variance for BN
         # not on the DA training set
+        # because no DA on valid and test
         self.set_mean_var(self.train_set)
         
         # test it on the validation set
@@ -196,6 +202,8 @@ class Trainer(object):
             self.best_validation_ER = self.validation_ER
             self.best_test_ER = self.test_ER
             self.best_epoch = self.epoch
+            if self.save_path != None:
+                self.model.save_params_file(self.save_path)
     
     def load_shared_dataset(self, set, start,size):
         

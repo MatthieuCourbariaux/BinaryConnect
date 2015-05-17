@@ -38,7 +38,8 @@ from format import stochastic_rounding
 class linear_layer(object):
     
     def __init__(self, rng, n_inputs, n_units, BN=False,
-        binary=None, stochastic=False):
+        binary_training=False, stochastic_training=False,
+        binary_test=False, stochastic_test=0):
         
         self.rng = rng
         
@@ -49,10 +50,14 @@ class linear_layer(object):
         self.BN = BN
         print "        BN = "+str(BN)
         
-        self.binary = binary
-        print "        binary = "+str(binary)
-        self.stochastic = stochastic
-        print "        stochastic = "+str(stochastic)     
+        self.binary_training = binary_training
+        print "        binary_training = "+str(binary_training)
+        self.stochastic_training = stochastic_training
+        print "        stochastic_training = "+str(stochastic_training)     
+        self.binary_test = binary_test
+        print "        binary_test = "+str(binary_test)
+        self.stochastic_test = stochastic_test
+        print "        stochastic_test = "+str(stochastic_test)     
         
         self.high = np.float32(np.sqrt(6. / (n_inputs + n_units)))
         self.W0 = np.float32(self.high/2)
@@ -85,49 +90,54 @@ class linear_layer(object):
         # shape the input as a matrix (batch_size, n_inputs)
         self.x = x.flatten(2)
         
+        binary_deterministic_training = (self.binary_training == True) and (self.stochastic_training == False)
+        binary_stochastic_training = (self.binary_training == True) and (self.stochastic_training == True)
+        binary_deterministic_test = (self.binary_test == True) and (self.stochastic_test == False)
+        binary_stochastic_test = (self.binary_test == True) and (self.stochastic_test == True)       
+        binary_deterministic = ((binary_deterministic_training == True) and (eval==False)) or ((binary_deterministic_test==True) and (eval==True))
+        binary_stochastic = ((binary_stochastic_training == True) and (eval==False)) or ((binary_stochastic_test==True) and (eval==True))
+        
         # Binary weights
         # I could scale x or z instead of W 
         # and the dot product would become an accumulation
         # I am not doing it to keep the code simple
-        if self.binary == True:
+        if binary_deterministic == True:
+                
+            # in the round to nearest case, we use binary weights during eval and training
+            # [?,?] -> -W0 or W0
+            self.Wb = self.W0 * T.sgn(self.W)
             
-            if self.stochastic == True:
-
-                # clip is a kind of piecewise linear tanh
-                # BTW, if I clip W directly, I do not need to clip Wb.
-                # [?,?] -> [-W0,W0]
-                self.Wb = T.clip(self.W, -self.W0, self.W0)
-                
-                # [-W0,W0] -> -W0 or W0
-                if eval == False:
-                
-                    # [-W0,W0] -> [-1,1]
-                    self.Wb = self.Wb/self.W0
-                    
-                    # [-1,1] -> [0,1]
-                    self.Wb = (self.Wb + 1.)*.5
-                    
-                    # rounding
-                    # [0,1] -> 0 or 1
-                    self.Wb = stochastic_rounding(self.Wb,self.rng)                
-                    
-                    # 0 or 1 -> -1 or 1
-                    self.Wb = 2. * self.Wb -1.
-                    
-                    # -1 or 1 -> -W0 or W0
-                    self.Wb = self.W0 * self.Wb
-                
-            else:
+            z =  T.dot(self.x, self.Wb)
             
-                # in the round to nearest case, we use binary weights during eval and training
-                # [-W0,W0] -> -W0 or W0
-                self.Wb = self.W0 * T.sgn(self.W)
-
+        
+        elif binary_stochastic == True:
+            
+            # clip is a kind of piecewise linear tanh
+            # BTW, if I clip W directly, I do not need to clip Wb.
+            # [?,?] -> [-W0,W0]
+            self.Wb = T.clip(self.W, -self.W0, self.W0)
+            
+            # [-W0,W0] -> [-1,1]
+            self.Wb = self.Wb/self.W0
+            
+            # [-1,1] -> [0,1]
+            self.Wb = (self.Wb + 1.)*.5
+            
+            # rounding
+            # [0,1] -> 0 or 1
+            self.Wb = stochastic_rounding(self.Wb,self.rng)                
+            
+            # 0 or 1 -> -1 or 1
+            self.Wb = 2. * self.Wb -1.
+            
+            # -1 or 1 -> -W0 or W0
+            self.Wb = self.W0 * self.Wb
+            
             z =  T.dot(self.x, self.Wb)
             
         # continuous weights
         else:
-            z =  T.dot(self.x, self.W)        
+            z =  T.dot(self.x, self.W)   
         
         # for BN updates
         self.z = z
@@ -148,13 +158,13 @@ class linear_layer(object):
         z = z + self.b
         
         # activation function
-        y = self.activation(z)
+        self.y = self.activation(z)
         
-        return y
+        return self.y
     
     def bprop(self, cost):
         
-        if self.binary == True:
+        if self.binary_training == True:
             dEdWb = T.grad(cost=cost, wrt=self.Wb) 
             self.dEdW = dEdWb
             
@@ -184,7 +194,7 @@ class linear_layer(object):
         # 2) backprop the clip function with a rule for the boundaries:
         # if W is equal to W0, then I can only reduce W
         # if W is equal to -W0, then I can only augment W
-        if self.binary==True:
+        if self.binary_training==True:
             new_W = T.clip(new_W, -self.W0, self.W0)
         
         updates.append((self.W, new_W))
@@ -219,7 +229,7 @@ class linear_layer(object):
             updates.append((self.sum, 0.* self.sum))
             updates.append((self.sum2, 0.* self.sum2))
             
-            # for the GPU
+            # casting for the GPU
             n_samples = T.cast(n_samples,dtype=theano.config.floatX)
             
             # compute the mean and variance
@@ -271,9 +281,9 @@ class ReLU_conv_layer(linear_layer):
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
         
-        self.binary = binary
+        self.binary_training = binary
         print "        binary = "+str(binary)
-        self.stochastic = stochastic
+        self.stochastic_training = stochastic
         print "        stochastic = "+str(stochastic)
 
         # range of init
@@ -306,9 +316,9 @@ class ReLU_conv_layer(linear_layer):
         # x = x.reshape(self.image_shape)
         
         # discrete weights
-        if self.binary is not None:
-            self.Wb = linear_quantization(x=self.W,bit_width=self.binary,min=-self.high,max=self.high,
-                stochastic=self.stochastic,rng=self.rng)
+        if self.binary_training is not None:
+            self.Wb = linear_quantization(x=self.W,bit_width=self.binary_training,min=-self.high,max=self.high,
+                stochastic=self.stochastic_training,rng=self.rng)
             
         # continuous weights
         else:

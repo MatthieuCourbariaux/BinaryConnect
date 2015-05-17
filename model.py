@@ -29,16 +29,60 @@ class Network(object):
     
     layer = []                
     
-    def __init__(self, n_hidden_layer):
+    def __init__(self, n_hidden_layer, BN, samples_test):
         
         self.n_hidden_layers = n_hidden_layer
+        self.BN = BN
+        self.samples_test = samples_test
     
-    def fprop(self, x, can_fit, eval):
-    
-        y = self.layer[0].fprop(x, can_fit, eval)
+    # def fprop(self,x,can_fit,eval):
         
-        for k in range(1,self.n_hidden_layers+1):
-            y = self.layer[k].fprop(y, can_fit, eval)
+        # y = self.layer[0].fprop(x, can_fit, eval)
+        
+        # for k in range(1,self.n_hidden_layers+1):
+            # y = self.layer[k].fprop(y, can_fit, eval)
+        
+        # return y
+    
+    # def fprop_step(self, x, sum, can_fit,eval):
+        
+        # y = self.layer[0].fprop(x, can_fit, eval)
+        
+        # for k in range(1,self.n_hidden_layers+1):
+            # y = self.layer[k].fprop(y, can_fit, eval)
+        
+        # return sum + y
+        
+    def fprop(self, x, can_fit, eval):
+        
+        if (eval==True) and (can_fit==False):
+        # if eval==True:
+        
+            # the sum is computed recursively with fprop_step
+            def fprop_step(sum,self=self,x=x,can_fit=can_fit,eval=eval):
+            
+                y = self.layer[0].fprop(x, can_fit, eval)
+                
+                for k in range(1,self.n_hidden_layers+1):
+                    y = self.layer[k].fprop(y, can_fit, eval)
+                    
+                return sum + y
+
+            # outputs_info is the initial value of the sum
+            # sum = T.zeros_like(self.layer[self.n_hidden_layers].y)
+            sum = np.zeros((64,10), dtype=theano.config.floatX)
+            
+            values, updates = theano.scan(fprop_step, outputs_info=sum, n_steps=self.samples_test)
+            
+            # no need to divide by the number of classes as it has no impact on argmax
+            y = values[-1]/np.float32(10.)
+            
+        else:
+            
+            y = self.layer[0].fprop(x, can_fit, eval)
+                
+            for k in range(1,self.n_hidden_layers+1):
+                y = self.layer[k].fprop(y, can_fit, eval)
         
         return y
 
@@ -126,4 +170,42 @@ class Network(object):
             # print "             Bias max 1 = "+str(np.max(b1)) 
             # print "             Bias min 1 = "+str(np.min(b1)) 
             # print "             Bias mean 1 = "+str(np.mean(b1))
+
+    def save_params_file(self, path):        
+        
+        # Open the file and overwrite current contents
+        save_file = open(path, 'wb')
+        
+        # write all the parameters in the file
+        for k in xrange(self.n_hidden_layers+1):
+            cPickle.dump(self.layer[k].W.get_value(), save_file, -1)
+            cPickle.dump(self.layer[k].b.get_value(), save_file, -1)
+            
+            # BN stuff  
+            if self.BN == True:
+                cPickle.dump(self.layer[k].a.get_value(), save_file, -1)
+                cPickle.dump(self.layer[k].mean.get_value(), save_file, -1)
+                cPickle.dump(self.layer[k].var.get_value(), save_file, -1)
+            
+        # close the file
+        save_file.close()
+        
+    def load_params_file(self, path): 
+        
+        # Open the file
+        save_file = open(path)
+        
+        # read an load all the parameters
+        for k in xrange(self.n_hidden_layers+1):
+            self.layer[k].W.set_value(cPickle.load(save_file))
+            self.layer[k].b.set_value(cPickle.load(save_file))
+            
+            # BN stuff  
+            if self.BN == True:
+                self.layer[k].a.set_value(cPickle.load(save_file))
+                self.layer[k].mean.set_value(cPickle.load(save_file))
+                self.layer[k].var.set_value(cPickle.load(save_file))
+
+        # close the file
+        save_file.close()
         
