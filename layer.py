@@ -29,9 +29,9 @@ import time
 import scipy.stats
 
 # for convolution layers
-from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
-from theano.sandbox.cuda.basic_ops import gpu_contiguous
-from pylearn2.sandbox.cuda_convnet.pool import MaxPool
+# from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
+# from theano.sandbox.cuda.basic_ops import gpu_contiguous
+# from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
 from format import stochastic_rounding
 
@@ -85,10 +85,7 @@ class linear_layer(object):
     def activation(self, z):
         return z
     
-    def fprop(self, x, eval):
-        
-        # shape the input as a matrix (batch_size, n_inputs)
-        self.x = x.flatten(2)
+    def binarize_weights(self,W):
         
         binary_deterministic_training = (self.binary_training == True) and (self.stochastic_training == False)
         binary_stochastic_training = (self.binary_training == True) and (self.stochastic_training == True)
@@ -105,39 +102,46 @@ class linear_layer(object):
                 
             # in the round to nearest case, we use binary weights during eval and training
             # [?,?] -> -W0 or W0
-            self.Wb = self.W0 * T.sgn(self.W)
-            
-            z =  T.dot(self.x, self.Wb)
-            
+            Wb = self.W0 * T.sgn(W)            
         
         elif binary_stochastic == True:
             
             # clip is a kind of piecewise linear tanh
             # BTW, if I clip W directly, I do not need to clip Wb.
             # [?,?] -> [-W0,W0]
-            self.Wb = T.clip(self.W, -self.W0, self.W0)
+            Wb = T.clip(W, -self.W0, self.W0)
             
             # [-W0,W0] -> [-1,1]
-            self.Wb = self.Wb/self.W0
+            Wb = Wb/self.W0
             
             # [-1,1] -> [0,1]
             self.Wb = (self.Wb + 1.)*.5
             
             # rounding
             # [0,1] -> 0 or 1
-            self.Wb = stochastic_rounding(self.Wb,self.rng)                
+            Wb = stochastic_rounding(Wb,self.rng)                
             
             # 0 or 1 -> -1 or 1
-            self.Wb = 2. * self.Wb -1.
+            Wb = 2. * Wb -1.
             
             # -1 or 1 -> -W0 or W0
-            self.Wb = self.W0 * self.Wb
-            
-            z =  T.dot(self.x, self.Wb)
+            Wb = self.W0 * Wb
             
         # continuous weights
         else:
-            z =  T.dot(self.x, self.W)   
+            Wb = W
+            
+        return Wb
+    
+    def fprop(self, x, eval):
+        
+        # shape the input as a matrix (batch_size, n_inputs)
+        self.x = x.flatten(2)
+        
+        # binarize the weights
+        self.Wb = self.binarize_weights(self.W)
+        
+        z = T.dot(self.x, self.Wb)
         
         # for BN updates
         self.z = z
@@ -231,36 +235,41 @@ class ReLU_layer(linear_layer):
         
 class ReLU_conv_layer(linear_layer): 
     
-    def __init__(self, rng, image_shape, zero_pad, filter_shape, filter_stride, pool_shape, pool_stride, output_shape, partial_sum, BN,
-        binary=None, stochastic=False):
+    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN,
+        binary_training=False, stochastic_training=False,
+        binary_test=False, stochastic_test=0):
         
         self.rng = rng
         
         self.image_shape = image_shape
         print "        image_shape = "+str(image_shape)
-        self.zero_pad = zero_pad
-        print "        zero_pad = "+str(zero_pad)
+        # self.zero_pad = zero_pad
+        # print "        zero_pad = "+str(zero_pad)
         self.filter_shape = filter_shape
         print "        filter_shape = "+str(filter_shape)
-        self.filter_stride = filter_stride
-        print "        filter_stride = "+str(filter_stride)
+        # self.filter_stride = filter_stride
+        # print "        filter_stride = "+str(filter_stride)
         self.pool_shape = pool_shape
         print "        pool_shape = "+str(pool_shape)
-        self.pool_stride = pool_stride
-        print "        pool_stride = "+str(pool_stride)
-        self.output_shape = output_shape
-        print "        output_shape = "+str(output_shape)         
-        self.partial_sum = partial_sum
-        print "        partial_sum = "+str(partial_sum)
+        # self.pool_stride = pool_stride
+        # print "        pool_stride = "+str(pool_stride)
+        # self.output_shape = output_shape
+        # print "        output_shape = "+str(output_shape)         
+        # self.partial_sum = partial_sum
+        # print "        partial_sum = "+str(partial_sum)
         self.BN = BN
         print "        BN = "+str(BN)
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
         
-        self.binary_training = binary
-        print "        binary = "+str(binary)
-        self.stochastic_training = stochastic
-        print "        stochastic = "+str(stochastic)
+        self.binary_training = binary_training
+        print "        binary_training = "+str(binary_training)
+        self.stochastic_training = stochastic_training
+        print "        stochastic_training = "+str(stochastic_training)     
+        self.binary_test = binary_test
+        print "        binary_test = "+str(binary_test)
+        self.stochastic_test = stochastic_test
+        print "        stochastic_test = "+str(stochastic_test)     
 
         # range of init
         n_inputs = np.prod(filter_shape[1:])
@@ -268,6 +277,7 @@ class ReLU_conv_layer(linear_layer):
 
         # initialize weights with random weights
         self.high = np.float32(np.sqrt(6. / (n_inputs + n_units)))
+        self.W0 = np.float32(self.high/2)
         
         # filters parameters
         W_values = np.asarray(rng.uniform(low=-self.high, high=self.high, size=self.filter_shape),dtype=theano.config.floatX)
@@ -286,38 +296,38 @@ class ReLU_conv_layer(linear_layer):
         self.sum = theano.shared(value=b_values, name='sum')
         self.sum2 = theano.shared(value=b_values, name='sum2')
         
-    def fprop(self, x, can_fit):
+        # momentum
+        self.update_W = theano.shared(value=np.zeros(self.filter_shape, dtype=theano.config.floatX), name='update_W')
+        self.update_b = theano.shared(value=b_values, name='update_b')
+
+    def fprop(self, x, eval):
         
         # shape the input as it should be (not necessary)
         # x = x.reshape(self.image_shape)
         
-        # discrete weights
-        if self.binary_training is not None:
-            self.Wb = linear_quantization(x=self.W,bit_width=self.binary_training,min=-self.high,max=self.high,
-                stochastic=self.stochastic_training,rng=self.rng)
-            
-        # continuous weights
-        else:
-            self.Wb = self.W
+        # binarize the weights
+        self.Wb = self.binarize_weights(self.W)
         
         # convolution
-        x = x.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        W = self.Wb.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
-        x = gpu_contiguous(x)
-        W = gpu_contiguous(W)
-        z = conv_op(x, W)
-        
+        # x = x.dimshuffle(1, 2, 3, 0) # bc01 to c01b
+        # W = self.Wb.dimshuffle(1, 2, 3, 0) # bc01 to c01b
+        # conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
+        # x = gpu_contiguous(x)
+        # W = gpu_contiguous(W)
+        # z = conv_op(x, W)
+        z = T.nnet.conv.conv2d(x, self.Wb, border_mode='valid')
+
         # Maxpooling
-        pool_op = MaxPool(ds=self.pool_shape, stride=self.pool_stride)
-        z = pool_op(z)
-        z = z.dimshuffle(3, 0, 1, 2) # c01b to bc01
+        # pool_op = MaxPool(ds=self.pool_shape, stride=self.pool_stride)
+        # z = pool_op(z)
+        # z = z.dimshuffle(3, 0, 1, 2) # c01b to bc01
+        z = T.signal.downsample.max_pool_2d(input=z, ds=self.pool_shape)
         
         # for BN
         self.z = z
         
         # batch normalization
-        if can_fit == True:
+        if eval == False:
             
             # in the convolutional case, there is only a mean per feature map and not per location
             # http://arxiv.org/pdf/1502.03167v3.pdf
@@ -340,38 +350,14 @@ class ReLU_conv_layer(linear_layer):
         
         return y
         
-    def BN_updates_1(self):
+    def BN_updates(self):
         
         updates = []
         
         if self.BN == True:
         
-            updates.append((self.sum, self.sum + T.sum(self.z,axis=(0,2,3)))) 
-            updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=(0,2,3))))
-        
-        return updates
-        
-    def BN_updates_2(self,n_samples):
-        
-        updates = []
-        
-        if self.BN == True:
-        
-            # reset the sums
-            updates.append((self.sum, 0.* self.sum))
-            updates.append((self.sum2, 0.* self.sum2))
-            
-            # for the GPU
-            n_samples = T.cast(n_samples*self.output_shape[2]*self.output_shape[3],dtype=theano.config.floatX)
-            
-            # compute the mean and variance
-            mean = self.sum/n_samples
-            mean2 = self.sum2/n_samples
-            
-            updates.append((self.mean, mean))
-            
-            # variance = mean(x^2) - mean(x)^2
-            updates.append((self.var, mean2 - mean**2))
+            updates.append((self.sum, self.sum + T.sum(T.mean(self.z,axis=(2,3)),axis=(0)))) 
+            updates.append((self.sum2, self.sum2 + T.sum(T.mean(self.z**2,axis=(2,3)),axis=(0)))) 
         
         return updates
         

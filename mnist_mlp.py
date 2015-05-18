@@ -52,14 +52,14 @@ if __name__ == "__main__":
           
     print 'Loading the dataset' 
     
-    # train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
-    train_set = MNIST(which_set= 'train', start=0, stop = 128, center = True) # for testing data augmentation
+    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
+    # train_set = MNIST(which_set= 'train', start=0, stop = 128, center = True) # for testing data augmentation
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
     test_set = MNIST(which_set= 'test', center = True)
     
     # bc01 format
-    # train_set.X = train_set.X.reshape(50000,1,28,28)
-    train_set.X = train_set.X.reshape(128,1,28,28)
+    train_set.X = train_set.X.reshape(50000,1,28,28)
+    # train_set.X = train_set.X.reshape(128,1,28,28)
     valid_set.X = valid_set.X.reshape(10000,1,28,28)
     test_set.X = test_set.X.reshape(10000,1,28,28)
     
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     print 'Creating the model'
     
     rng = np.random.RandomState(1234)
-    batch_size = 128
+    batch_size = 64
     
     class PI_MNIST_model(Network):
 
@@ -89,11 +89,11 @@ if __name__ == "__main__":
             
             n_units = 1024
             n_classes = 10
-            BN = False
+            BN = True
             
-            binary_training=False
+            binary_training=True
             # whether quantization is deterministic or stochastic
-            stochastic_training=False
+            stochastic_training=True
             
             binary_test=False
             stochastic_test=False
@@ -127,16 +127,16 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .03
+    LR = .3
     M= .0
     gpu_batches = 50000/batch_size
-    n_epoch = 5000
-    monitor_step = 1000
-    LR_decay = 1.
+    n_epoch = 1000
+    monitor_step = 5
+    LR_decay = .99
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model, load_path = None, save_path = None,
+        model = model, load_path = None, save_path = "best_mlp4.pkl",
         zero_pad=0,
         # affine_transform_a=.1, # for MNIST CNN without zero pad
         affine_transform_a=0,

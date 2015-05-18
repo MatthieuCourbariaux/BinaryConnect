@@ -29,11 +29,6 @@ from layer import linear_layer, ReLU_layer, ReLU_conv_layer
 
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
-from pylearn2.train_extensions.window_flip import _zero_pad
-
-# import matplotlib.pyplot as plt
-# import matplotlib.cm as cm
-# from filter_plot import tile_raster_images
           
 def onehot(x,numclasses=None):
 
@@ -64,13 +59,9 @@ if __name__ == "__main__":
     
     # bc01 format
     train_set.X = train_set.X.reshape(50000,1,28,28)
+    # train_set.X = train_set.X.reshape(128,1,28,28)
     valid_set.X = valid_set.X.reshape(10000,1,28,28)
     test_set.X = test_set.X.reshape(10000,1,28,28)
-    
-    # zero padding, cost little may help Data Augmentation
-    # train_set.X = _zero_pad(array=train_set.X, amount=2, axes=(2, 3))
-    # valid_set.X = _zero_pad(array=valid_set.X, amount=2, axes=(2, 3))
-    # test_set.X = _zero_pad(array=test_set.X, amount=2, axes=(2, 3))
     
     # Onehot the targets
     train_set.y = np.float32(onehot(train_set.y))
@@ -91,132 +82,75 @@ if __name__ == "__main__":
     
     rng = np.random.RandomState(1234)
     batch_size = 64
-    # batch_size = 4096
     
     class MNIST_model(Network):
 
         def __init__(self, rng):
             
-            prop_bit_width = 1
-            prop_stochastic_rounding = False # stochastic rounding does not seem to work at all for propagations
-            update_bit_width = None
-            # update_bit_width = 1
-            update_stochastic_rounding = True
-            # BN = True
-            BN = False
+            n_classes = 10
+            BN = True
             
-            Network.__init__(self, n_hidden_layer = 4) 
+            binary_training=False
+            # whether quantization is deterministic or stochastic
+            stochastic_training=False
+            
+            binary_test=False
+            stochastic_test=False
+            # the number of samples for the monte carlo averaging
+            samples_test = 1
+            
+            Network.__init__(self, n_hidden_layer = 1, BN = BN, samples_test = samples_test,
+                batch_size=batch_size, n_classes=n_classes) 
             
             print "    Convolution layer 1:"
         
             self.layer.append(ReLU_conv_layer(
                 rng,
                 image_shape=(batch_size, 1, 28, 28),
-                # image_shape=(batch_size, 1, 32, 32),
-                zero_pad = 0, # add n zeros on both sides of the input
-                # filter_shape=(32, 1, 12, 12),
-                filter_shape=(32, 1, 8, 8),
-                filter_stride = 1,
-                pool_shape=(4, 4),
-                pool_stride = 2,
-                output_shape = (batch_size, 32, 10, 10),
-                partial_sum=1, 
-                BN=BN,
-                prop_bit_width=prop_bit_width, 
-                prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, 
-                update_stochastic_rounding=update_stochastic_rounding
-            ))
-            
-            print "    NiN layer:"
-        
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                image_shape=(batch_size, 32, 10, 10),
-                zero_pad = 0,
-                filter_shape=(16, 32, 1, 1),
-                filter_stride = 1,
-                pool_shape=(1, 1),
-                pool_stride = 1,
-                output_shape = (batch_size, 16, 10, 10),
-                partial_sum=1, 
-                BN=BN,
-                prop_bit_width=prop_bit_width, 
-                prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, 
-                update_stochastic_rounding=update_stochastic_rounding
-            ))
-
-            print "    Convolution layer 2:"
-        
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                image_shape=(batch_size, 16, 10, 10),
-                zero_pad = 3, 
-                filter_shape=(16, 16, 8, 8),
-                filter_stride = 1,
-                pool_shape=(4, 4),
-                pool_stride =2,
-                output_shape = (batch_size, 16, 4, 4),
-                partial_sum=1, 
-                BN=BN,
-                prop_bit_width=prop_bit_width, 
-                prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, 
-                update_stochastic_rounding=update_stochastic_rounding
-            ))
-            
-            print "    Convolution layer 3:"
-        
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                image_shape=(batch_size, 16, 4, 4),
-                zero_pad = 3,
-                filter_shape=(16, 16, 5, 5),
-                filter_stride = 1,
-                pool_shape=(2, 2),
-                pool_stride =2,
-                output_shape = (batch_size, 16, 3, 3),
-                partial_sum=1, 
-                BN=BN,
-                prop_bit_width=prop_bit_width, 
-                prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, 
-                update_stochastic_rounding=update_stochastic_rounding
+                filter_shape=(32, 1, 5, 5),
+                pool_shape=(12, 12),
+                BN = BN,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
             ))
             
             print "    L2 SVM layer:"
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= 16*3*3, 
+                n_inputs= 32*2*2, 
                 n_units = 10, 
-                BN=BN,
-                prop_bit_width=prop_bit_width, 
-                prop_stochastic_rounding=prop_stochastic_rounding,
-                update_bit_width=update_bit_width, 
-                update_stochastic_rounding=update_stochastic_rounding
+                BN = BN,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
             ))
             
     model = MNIST_model(rng = rng)
     
     print 'Creating the trainer'
     
-    LR = .01
+    LR = .1
+    M= .0
     gpu_batches = 50000/batch_size
-    
     n_epoch = 1000
-    monitor_step = 2
+    monitor_step = 5
     LR_decay = .99
-    
-    # n_epoch = 5000
-    # monitor_step = 1000
-    # LR_decay = .9995
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model,
+        model = model, load_path = None, save_path = "best_cnn.pkl",
+        zero_pad=0,
+        # affine_transform_a=.1, # for MNIST CNN without zero pad
+        affine_transform_a=0, # a is (more or less) the rotations
+        # affine_transform_b=.5, # for MNIST CNN without zero pad
+        affine_transform_b=0, # b is the translations
+        horizontal_flip=False,
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
+        M = M,
         batch_size = batch_size, gpu_batches = gpu_batches,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = False, shuffle_examples = True)
@@ -232,9 +166,29 @@ if __name__ == "__main__":
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
     
+    # print 'Save first hidden layer weights'
+    
+    # W = model.layer[1].W.get_value()
+    # import pickle
+    # pickle.dump( W, open( "W.pkl", "wb" ) )
+    
     # print 'Display weights'
     
-    # W = 2.* (np.transpose(model.layer[0].W.get_value())>=0.) - 1.
+    # import matplotlib.pyplot as plt
+    # import matplotlib.cm as cm
+    # from filter_plot import tile_raster_images
+    
+    # W = np.transpose(model.layer[0].W.get_value())
+    
+    # print "min(W) = " + str(np.min(W))
+    # print "max(W) = " + str(np.max(W))
+    # print "mean(W) = " + str(np.mean(W))
+    # print "mean(abs(W)) = " + str(np.mean(abs(W)))
+    # print "var(W) = " + str(np.var(W))
+    
+    # plt.hist(W,bins=100)
+    # plt.show()
+    
     # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
     # plt.imshow(W, cmap = cm.Greys_r)
     # plt.show()
