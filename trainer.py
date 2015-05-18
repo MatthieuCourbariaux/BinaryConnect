@@ -27,7 +27,7 @@ import time
 
 # for data augmentation
 from scipy.ndimage.interpolation import rotate, affine_transform
-# import cv2
+from pylearn2.train_extensions.window_flip import _zero_pad
 
 class dataset(object):
     def __init__(self,set):
@@ -41,13 +41,27 @@ class Trainer(object):
     def __init__(self,
             rng,
             train_set, valid_set, test_set,
+            zero_pad,
+            affine_transform_a,
+            affine_transform_b,
+            horizontal_flip,
             model, save_path, load_path,
             LR, LR_decay, LR_fin,
             M, 
             batch_size, gpu_batches,
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
-            # data_augmentation):
+        
+        self.zero_pad = zero_pad
+        print "    zero_pad = "+str(zero_pad)   
+        self.affine_transform_a = affine_transform_a
+        print "    affine_transform_a = "+str(affine_transform_a)   
+        self.affine_transform_b = affine_transform_b
+        print "    affine_transform_b = "+str(affine_transform_b)   
+        self.horizontal_flip = horizontal_flip
+        print "    horizontal_flip = "+str(horizontal_flip)   
+        print '    shuffle_batches = %i' %(shuffle_batches)
+        print '    shuffle_examples = %i' %(shuffle_examples)
         
         print '    Learning rate = %f' %(LR)
         print '    Learning rate decay = %f' %(LR_decay)
@@ -57,18 +71,19 @@ class Trainer(object):
         print '    gpu_batches = %i' %(gpu_batches)
         print '    Number of epochs = %i' %(n_epoch)
         print '    Monitor step = %i' %(monitor_step)
-        print '    shuffle_batches = %i' %(shuffle_batches)
-        print '    shuffle_examples = %i' %(shuffle_examples)
-        # print '    data_augmentation = %i' %(data_augmentation)
-
+        
+        # zero padding, may help Data Augmentation
+        train_set.X = _zero_pad(array=train_set.X, amount=self.zero_pad, axes=(2, 3))
+        valid_set.X = _zero_pad(array=valid_set.X, amount=self.zero_pad, axes=(2, 3))
+        test_set.X = _zero_pad(array=test_set.X, amount=self.zero_pad, axes=(2, 3))
+        
         # save the dataset
-        self.rng = rng
-        self.shuffle_batches = shuffle_batches
-        self.shuffle_examples = shuffle_examples
-        # self.data_augmentation = data_augmentation
         self.train_set = train_set
         self.valid_set = valid_set
         self.test_set = test_set
+        self.rng = rng
+        self.shuffle_batches = shuffle_batches
+        self.shuffle_examples = shuffle_examples
         
         # in order to avoid augmenting already augmented data
         self.DA_train_set = dataset(train_set)
@@ -111,34 +126,43 @@ class Trainer(object):
     def affine_transformations(self,set):
         
         DA_set = dataset(set)
-        
-        # for every samples
-        for i in range(set.X.shape[0]):
 
-            # openCV code
-            # M = np.float32([[1,0,0],[0,1,0]])
-            # DA_set.X[i] = cv2.warpAffine(set.X[i],M,(28,28))
+        # for every samples in the training set
+        for i in range(set.X.shape[0]):
             
             # making an affine transformation of the coordinate of the points of the image
             # (x',y') = A(x,y) + B
             # result is rotation, translation, scaling on each axis
             # to adjust a and b, limit the size of the dataset
-
-            a = .1 # best for CNN MNIST, 128 samples
-            # a = 0.
-            A = np.identity(n=2)+self.rng.uniform(low=-a,high=a,size=(2, 2))
-            b = .5 # best for CNN MNIST, 128 samples
-            # b = 0.
-            B = self.rng.uniform(low=-b,high=b,size=(2))
+            
+            # a = .1 # best for CNN MNIST, 128 samples
+            A = np.identity(n=2)+self.rng.uniform(low=-self.affine_transform_a,high=self.affine_transform_a,size=(2, 2))
+            # b = .5 # best for CNN MNIST, 128 samples
+            B = self.rng.uniform(low=-self.affine_transform_b,high=self.affine_transform_b,size=(2))
             
             # for every channels
             for j in range(set.X.shape[1]):
             
-                DA_set.X[i]=affine_transform(set.X[i][j],A,offset=B,order=2)
+                DA_set.X[i][j]=affine_transform(set.X[i][j],A,offset=B,order=2)
                 
                 # max_rot = 15
                 # angle = self.rng.random_integers(-max_rot,max_rot)
                 # DA_set.X[i] = rotate(DA_set.X[i].reshape(28,28),angle, reshape=False).reshape(784)
+        
+        return DA_set
+        
+    def window_flip(self,set):
+        
+        DA_set = dataset(set)
+
+        # for every samples in the training set
+        for i in range(set.X.shape[0]):
+            
+            # for every channels
+            for j in range(set.X.shape[1]):
+                
+                if bool(self.rng.random_integers(0,1)) == True:
+                    DA_set.X[i][j]=np.fliplr(set.X[i][j])
         
         return DA_set
         
@@ -171,10 +195,13 @@ class Trainer(object):
         # start by shuffling train set
         if self.shuffle_examples == True:
             self.train_set = self.shuffle(self.train_set)
-            
+        
         # data augmentation
-        # self.DA_train_set = self.affine_transformations(self.train_set)
         self.DA_train_set = self.train_set
+        if (self.affine_transform_a != 0) or (self.affine_transform_b !=0):
+            self.DA_train_set = self.affine_transformations(self.DA_train_set)
+        if self.horizontal_flip==True:
+            self.DA_train_set = self.window_flip(self.DA_train_set)
         
         self.epoch += self.step
         

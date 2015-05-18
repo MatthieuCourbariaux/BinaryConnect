@@ -29,7 +29,6 @@ from layer import linear_layer, ReLU_layer, ReLU_conv_layer
 
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
-from pylearn2.train_extensions.window_flip import _zero_pad
           
 def onehot(x,numclasses=None):
 
@@ -53,20 +52,16 @@ if __name__ == "__main__":
           
     print 'Loading the dataset' 
     
-    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
-    # train_set = MNIST(which_set= 'train', start=0, stop = 128, center = True) # for testing data augmentation
+    # train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
+    train_set = MNIST(which_set= 'train', start=0, stop = 128, center = True) # for testing data augmentation
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
     test_set = MNIST(which_set= 'test', center = True)
     
     # bc01 format
-    train_set.X = train_set.X.reshape(50000,1,28,28)
+    # train_set.X = train_set.X.reshape(50000,1,28,28)
+    train_set.X = train_set.X.reshape(128,1,28,28)
     valid_set.X = valid_set.X.reshape(10000,1,28,28)
     test_set.X = test_set.X.reshape(10000,1,28,28)
-    
-    # zero padding, cost little may help Data Augmentation
-    # train_set.X = _zero_pad(array=train_set.X, amount=2, axes=(2, 3))
-    # valid_set.X = _zero_pad(array=valid_set.X, amount=2, axes=(2, 3))
-    # test_set.X = _zero_pad(array=test_set.X, amount=2, axes=(2, 3))
     
     # Onehot the targets
     train_set.y = np.float32(onehot(train_set.y))
@@ -86,24 +81,27 @@ if __name__ == "__main__":
     print 'Creating the model'
     
     rng = np.random.RandomState(1234)
-    batch_size = 64
+    batch_size = 128
     
     class PI_MNIST_model(Network):
 
         def __init__(self, rng):
             
             n_units = 1024
-            BN = True
+            n_classes = 10
+            BN = False
             
-            binary_training=True
+            binary_training=False
             # whether quantization is deterministic or stochastic
-            stochastic_training=True
+            stochastic_training=False
             
             binary_test=False
             stochastic_test=False
+            # the number of samples for the monte carlo averaging
             samples_test = 1
             
-            Network.__init__(self, n_hidden_layer = 3, BN = BN, samples_test = samples_test) 
+            Network.__init__(self, n_hidden_layer = 3, BN = BN, samples_test = samples_test,
+                batch_size=batch_size, n_classes=n_classes) 
             
             print "    Fully connected layer 1:"
             self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN,
@@ -121,7 +119,7 @@ if __name__ == "__main__":
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
-            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = 10, BN = BN,
+            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes, BN = BN,
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
     
@@ -129,16 +127,22 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .3
+    LR = .03
     M= .0
     gpu_batches = 50000/batch_size
-    n_epoch = 1000
-    monitor_step = 3
-    LR_decay = .99
+    n_epoch = 5000
+    monitor_step = 1000
+    LR_decay = 1.
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model, load_path = None, save_path = "best_mlp4.pkl",
+        model = model, load_path = None, save_path = None,
+        zero_pad=0,
+        # affine_transform_a=.1, # for MNIST CNN without zero pad
+        affine_transform_a=0,
+        # affine_transform_b=.5, # for MNIST CNN without zero pad
+        affine_transform_b=0,
+        horizontal_flip=False,
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         M = M,
         batch_size = batch_size, gpu_batches = gpu_batches,
