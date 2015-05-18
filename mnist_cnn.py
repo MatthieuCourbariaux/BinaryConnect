@@ -86,8 +86,7 @@ if __name__ == "__main__":
     class MNIST_model(Network):
 
         def __init__(self, rng):
-            
-            n_classes = 10
+
             BN = True
             
             binary_training=False
@@ -99,16 +98,77 @@ if __name__ == "__main__":
             # the number of samples for the monte carlo averaging
             samples_test = 1
             
-            Network.__init__(self, n_hidden_layer = 1, BN = BN, samples_test = samples_test,
-                batch_size=batch_size, n_classes=n_classes) 
+            # architecture
+            # greatly inspired from http://arxiv.org/pdf/1412.6071v4.pdf
+            channel_size = 30
+            n_channels = 16 # number of channels of the first layer
+            n_classes = 10
+            length = 3 # number of C2-C2-MP2
+            n_hidden_layer = (length+1)*2
             
-            print "    Convolution layer 1:"
-        
+            Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN, samples_test = samples_test,
+                batch_size=batch_size, n_classes=n_classes)
+            
+            for i in range(length):
+                
+                print "    C2 layer:"
+                
+                self.layer.append(ReLU_conv_layer(
+                    rng,
+                    image_shape=(batch_size, n_channels * i + (i==0), channel_size, channel_size),
+                    filter_shape=(n_channels*(i+1), n_channels * i + (i==0), 2, 2),
+                    pool_shape=(1,1),
+                    BN = BN,
+                    binary_training=binary_training, 
+                    stochastic_training=stochastic_training,
+                    binary_test=binary_test, 
+                    stochastic_test=stochastic_test
+                ))
+                
+                # valid C2
+                channel_size = channel_size-1
+                
+                print "    C2 + MP2 layer:"
+                
+                self.layer.append(ReLU_conv_layer(
+                    rng,
+                    image_shape=(batch_size, n_channels*(i+1), channel_size, channel_size),
+                    filter_shape=(n_channels*(i+1), n_channels*(i+1), 2, 2),
+                    pool_shape=(2, 2),
+                    BN = BN,
+                    binary_training=binary_training, 
+                    stochastic_training=stochastic_training,
+                    binary_test=binary_test, 
+                    stochastic_test=stochastic_test
+                ))
+                
+                # valid C2 and MP2
+                channel_size = (channel_size-1)/2
+            
+            print "    C2 layer:"
+            
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, 1, 28, 28),
-                filter_shape=(32, 1, 5, 5),
-                pool_shape=(12, 12),
+                image_shape=(batch_size, n_channels*length, channel_size, channel_size),
+                filter_shape=(n_channels*(length+1), n_channels*length, 2, 2),
+                pool_shape=(1,1),
+                BN = BN,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            # valid C2
+            channel_size = channel_size-1
+            
+            print "    C1 layer:"
+            
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                image_shape=(batch_size, n_channels*(length+1), channel_size, channel_size),
+                filter_shape=(n_channels*(length+2), n_channels*(length+1), 1, 1),
+                pool_shape=(1,1),
                 BN = BN,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
@@ -120,8 +180,8 @@ if __name__ == "__main__":
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= 32*2*2, 
-                n_units = 10, 
+                n_inputs= n_channels*(length+2)*channel_size*channel_size, 
+                n_units = n_classes, 
                 BN = BN,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
@@ -133,7 +193,7 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .1
+    LR = .03
     M= .0
     gpu_batches = 50000/batch_size
     n_epoch = 1000
@@ -143,7 +203,7 @@ if __name__ == "__main__":
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
         model = model, load_path = None, save_path = "best_cnn.pkl",
-        zero_pad=0,
+        zero_pad=1,
         # affine_transform_a=.1, # for MNIST CNN without zero pad
         affine_transform_a=0, # a is (more or less) the rotations
         # affine_transform_b=.5, # for MNIST CNN without zero pad

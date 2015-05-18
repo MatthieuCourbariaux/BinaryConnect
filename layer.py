@@ -321,7 +321,8 @@ class ReLU_conv_layer(linear_layer):
         # pool_op = MaxPool(ds=self.pool_shape, stride=self.pool_stride)
         # z = pool_op(z)
         # z = z.dimshuffle(3, 0, 1, 2) # c01b to bc01
-        z = T.signal.downsample.max_pool_2d(input=z, ds=self.pool_shape)
+        if self.pool_shape != (1,1):
+            z = T.signal.downsample.max_pool_2d(input=z, ds=self.pool_shape)
         
         # for BN
         self.z = z
