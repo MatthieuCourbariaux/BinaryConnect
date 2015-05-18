@@ -85,7 +85,7 @@ class linear_layer(object):
     def activation(self, z):
         return z
     
-    def fprop(self, x, can_fit, eval):
+    def fprop(self, x, eval):
         
         # shape the input as a matrix (batch_size, n_inputs)
         self.x = x.flatten(2)
@@ -143,7 +143,7 @@ class linear_layer(object):
         self.z = z
         
         # batch normalization
-        if can_fit == True:
+        if eval == False:
             mean = T.mean(z,axis=0)
             var = T.var(z,axis=0)
             
@@ -158,9 +158,9 @@ class linear_layer(object):
         z = z + self.b
         
         # activation function
-        self.y = self.activation(z)
+        y = self.activation(z)
         
-        return self.y
+        return y
     
     def bprop(self, cost):
         

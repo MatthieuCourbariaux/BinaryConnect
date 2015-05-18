@@ -151,7 +151,7 @@ class Trainer(object):
         self.best_epoch = self.epoch
         
         # set the mean and variance for BN
-        self.set_mean_var(self.train_set) 
+        self.set_mean_var(self.train_set)
         
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)

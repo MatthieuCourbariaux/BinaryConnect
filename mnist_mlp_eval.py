@@ -93,6 +93,7 @@ if __name__ == "__main__":
         def __init__(self, rng):
             
             n_units = 1024
+            n_classes = 10
             BN = True
             
             binary_training=True
@@ -101,9 +102,11 @@ if __name__ == "__main__":
             
             binary_test=True
             stochastic_test=True
-            samples_test = 8
+            # the number of samples for the monte carlo averaging
+            samples_test = 4
             
-            Network.__init__(self, n_hidden_layer = 3, BN = BN, samples_test = samples_test) 
+            Network.__init__(self, n_hidden_layer = 3, BN = BN, samples_test = samples_test,
+                batch_size=batch_size, n_classes=n_classes) 
             
             print "    Fully connected layer 1:"
             self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN,
@@ -121,7 +124,7 @@ if __name__ == "__main__":
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
-            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = 10, BN = BN,
+            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes, BN = BN,
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
     

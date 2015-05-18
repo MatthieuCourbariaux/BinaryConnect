@@ -29,60 +29,47 @@ class Network(object):
     
     layer = []                
     
-    def __init__(self, n_hidden_layer, BN, samples_test):
+    def __init__(self, n_hidden_layer, BN, samples_test, n_classes, batch_size):
         
+   
         self.n_hidden_layers = n_hidden_layer
+        print "    n_hidden_layers = "+str(n_hidden_layer)    
         self.BN = BN
+        print "    BN = "+str(BN)   
         self.samples_test = samples_test
-    
-    # def fprop(self,x,can_fit,eval):
+        print "    samples_test = "+str(samples_test) 
+        self.n_classes = n_classes
+        print "    n_classes = "+str(n_classes)
+        self.batch_size = batch_size
+        print "    batch_size = "+str(batch_size)        
         
-        # y = self.layer[0].fprop(x, can_fit, eval)
+    def fprop(self, x, eval):
         
-        # for k in range(1,self.n_hidden_layers+1):
-            # y = self.layer[k].fprop(y, can_fit, eval)
+        def fprop_step(sum,self=self,x=x,eval=eval):
         
-        # return y
-    
-    # def fprop_step(self, x, sum, can_fit,eval):
-        
-        # y = self.layer[0].fprop(x, can_fit, eval)
-        
-        # for k in range(1,self.n_hidden_layers+1):
-            # y = self.layer[k].fprop(y, can_fit, eval)
-        
-        # return sum + y
-        
-    def fprop(self, x, can_fit, eval):
-        
-        if (eval==True) and (can_fit==False):
-        # if eval==True:
-        
-            # the sum is computed recursively with fprop_step
-            def fprop_step(sum,self=self,x=x,can_fit=can_fit,eval=eval):
+            y = self.layer[0].fprop(x, eval)
             
-                y = self.layer[0].fprop(x, can_fit, eval)
+            for k in range(1,self.n_hidden_layers+1):
+                y = self.layer[k].fprop(y, eval)
                 
-                for k in range(1,self.n_hidden_layers+1):
-                    y = self.layer[k].fprop(y, can_fit, eval)
-                    
-                return sum + y
-
-            # outputs_info is the initial value of the sum
-            # sum = T.zeros_like(self.layer[self.n_hidden_layers].y)
-            sum = np.zeros((64,10), dtype=theano.config.floatX)
+            return sum + y
+        
+        # outputs_info is the initial value of the sum
+        # sum = T.zeros_like(self.layer[self.n_hidden_layers].y)
+        
+        sum = np.zeros((self.batch_size,self.n_classes), dtype=theano.config.floatX)
+        
+        if eval==True:
             
+            # the sum is computed recursively with fprop_step
             values, updates = theano.scan(fprop_step, outputs_info=sum, n_steps=self.samples_test)
             
             # no need to divide by the number of classes as it has no impact on argmax
-            y = values[-1]/np.float32(10.)
+            # y = values[-1]/np.float32(10.)
+            y = values[-1]
             
         else:
-            
-            y = self.layer[0].fprop(x, can_fit, eval)
-                
-            for k in range(1,self.n_hidden_layers+1):
-                y = self.layer[k].fprop(y, can_fit, eval)
+            y = fprop_step(sum)
         
         return y
 
@@ -109,7 +96,7 @@ class Network(object):
 
     def BN_updates(self,x):
         
-        y = self.fprop(x=x,can_fit=False,eval=True) 
+        y = self.fprop(x=x,eval=True) 
         
         updates = self.layer[0].BN_updates()
         for k in range(1,self.n_hidden_layers+1):
@@ -120,7 +107,7 @@ class Network(object):
     # you give it the input and the target and it gives you the updates
     def parameters_updates(self, x, t, LR, M):
         
-        y = self.fprop(x=x,can_fit=True,eval=False)        
+        y = self.fprop(x=x,eval=False)        
         self.bprop(y, t)
         
         # updates
@@ -132,7 +119,7 @@ class Network(object):
     
     def errors(self, x, t):
         
-        y = self.fprop(x=x,can_fit=False,eval=True)
+        y = self.fprop(x=x,eval=True)
         # z = self.layer[self.n_hidden_layers].z
         
         # error function

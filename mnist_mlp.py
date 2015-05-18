@@ -138,7 +138,7 @@ if __name__ == "__main__":
     
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model, load_path = None, save_path = "best_mlp3.pkl",
+        model = model, load_path = None, save_path = "best_mlp4.pkl",
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         M = M,
         batch_size = batch_size, gpu_batches = gpu_batches,
