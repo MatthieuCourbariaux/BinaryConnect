@@ -271,30 +271,43 @@ class Trainer(object):
         else:
             n_remaining_batches = n_batches
         
-        for i in range(n_gpu_batches):
-        
-            self.load_shared_dataset(set,
-                start=i*self.gpu_batches,
-                size=self.gpu_batches)
+        # must do it once per layer
+        # could be made more efficient but no time for it
+        for k in range(self.model.n_hidden_layers+1):
+                       
+            for i in range(n_gpu_batches):
             
-            for j in range(self.gpu_batches): 
+                self.load_shared_dataset(set,
+                    start=i*self.gpu_batches,
+                    size=self.gpu_batches)
+                
+                for j in range(self.gpu_batches): 
 
-                self.compute_sum_batch(j)
-        
-        # load the last incomplete gpu batch of batches
-        if n_remaining_batches > 0:
-        
-            self.load_shared_dataset(set,
-                    start=n_gpu_batches*self.gpu_batches,
-                    size=n_remaining_batches)
+                    self.compute_sum_batch(j)
             
-            for j in range(n_remaining_batches): 
+            # load the last incomplete gpu batch of batches
+            if n_remaining_batches > 0:
+            
+                self.load_shared_dataset(set,
+                        start=n_gpu_batches*self.gpu_batches,
+                        size=n_remaining_batches)
+                
+                for j in range(n_remaining_batches): 
 
-                self.compute_sum_batch(j)
-        
-        # set the mean and the var of BN
-        n_samples = n_batches*self.batch_size
-        self.compute_mean_var(n_samples)
+                    self.compute_sum_batch(j)
+            
+            # set the mean and var of the k th layer
+            n_samples = n_batches*self.batch_size
+            mean = self.model.layer[k].sum.get_value()/n_samples
+            mean2 = self.model.layer[k].sum2.get_value()/n_samples
+            
+            self.model.layer[k].mean.set_value(mean)
+            # variance = mean(x^2) - mean(x)^2
+            self.model.layer[k].var.set_value(mean2 - mean**2)
+            # reset the sums
+            for l in range(self.model.n_hidden_layers+1):
+                self.model.layer[l].sum.set_value(0*self.model.layer[l].sum.get_value())
+                self.model.layer[l].sum2.set_value(0*self.model.layer[l].sum2.get_value())   
         
         return
     
@@ -383,11 +396,8 @@ class Trainer(object):
         
         # batch normalization specific functions
         # I am forced to compute mean and var over the whole datasets because of memory explosion.
-        self.compute_sum_batch = theano.function(inputs = [index], updates=self.model.BN_updates_1(x), givens={
+        self.compute_sum_batch = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
                 x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
                 name = "compute_sum_batch", on_unused_input='ignore')
-                
-        self.compute_mean_var = theano.function(inputs = [n_samples], updates=self.model.BN_updates_2(n_samples),
-                name = "compute_mean_var", on_unused_input='ignore')
                 
                

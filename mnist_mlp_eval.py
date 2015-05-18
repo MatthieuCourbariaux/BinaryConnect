@@ -101,7 +101,7 @@ if __name__ == "__main__":
             
             binary_test=True
             stochastic_test=True
-            samples_test = 1
+            samples_test = 8
             
             Network.__init__(self, n_hidden_layer = 3, BN = BN, samples_test = samples_test) 
             

@@ -208,7 +208,7 @@ class linear_layer(object):
 
         return updates
     
-    def BN_updates_1(self):
+    def BN_updates(self):
         
         updates = []
         
@@ -216,30 +216,6 @@ class linear_layer(object):
         
             updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
             updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
-        
-        return updates
-        
-    def BN_updates_2(self,n_samples):
-        
-        updates = []
-        
-        if self.BN == True:
-        
-            # reset the sums
-            updates.append((self.sum, 0.* self.sum))
-            updates.append((self.sum2, 0.* self.sum2))
-            
-            # casting for the GPU
-            n_samples = T.cast(n_samples,dtype=theano.config.floatX)
-            
-            # compute the mean and variance
-            mean = self.sum/n_samples
-            mean2 = self.sum2/n_samples
-            
-            updates.append((self.mean, mean))
-            
-            # variance = mean(x^2) - mean(x)^2
-            updates.append((self.var, mean2 - mean**2))
         
         return updates
 
