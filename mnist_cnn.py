@@ -94,11 +94,8 @@ if __name__ == "__main__":
     binary_training=False
     # whether quantization is deterministic or stochastic
     stochastic_training=False
-
     binary_test=False
     stochastic_test=False
-    # the number of samples for the monte carlo averaging
-    samples_test = 2
     
     print 'Loading the dataset' 
     
@@ -132,7 +129,7 @@ if __name__ == "__main__":
 
         def __init__(self, rng):
 
-            Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN, samples_test = samples_test)
+            Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN)
             
             local_channel_size = channel_size
             

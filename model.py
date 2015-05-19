@@ -29,44 +29,28 @@ class Network(object):
     
     layer = []                
     
-    def __init__(self, n_hidden_layer, BN, samples_test):
+    def __init__(self, n_hidden_layer, BN):
         
    
         self.n_hidden_layers = n_hidden_layer
         print "    n_hidden_layers = "+str(n_hidden_layer)    
         self.BN = BN
         print "    BN = "+str(BN)   
-        self.samples_test = samples_test
-        print "    samples_test = "+str(samples_test)     
-        
+    
+    # Monte Carlo averaging
+    # So far, I change the weigths at each minibatch, which makes no sense hardware wise.
+    # the way it would make sense = sample x set of weights, and use them from A to Z, then monte carlo.
+    # how would I do it ?
+    # I should use a shared variable for the binarized weights
+    # I should use a shared variable for the output average.
+    # I should compute BN mean and var for each of the sampled set of weights
+    
     def fprop(self, x, eval):
+    
+        for k in range(self.n_hidden_layers+1):
+            x = self.layer[k].fprop(x, eval)
         
-        y = self.layer[0].fprop(x, eval)
-            
-        for k in range(1,self.n_hidden_layers+1):
-            y = self.layer[k].fprop(y, eval)
-        
-        if eval==True:
-            
-            # outputs_info is the initial value of the sum
-            sum = T.zeros_like(y)
-            
-            def fprop_step(sum,self=self,x=x,eval=eval):
-                
-                y = self.layer[0].fprop(x, eval)
-                
-                for k in range(1,self.n_hidden_layers+1):
-                    y = self.layer[k].fprop(y, eval)
-                    
-                return sum + y     
-        
-            # the sum is computed recursively with fprop_step
-            values, updates = theano.scan(fprop_step, outputs_info=sum, n_steps=self.samples_test)
-            
-            # no need to divide by the number of classes as it has no impact on argmax
-            y = values[-1]
-        
-        return y
+        return x
 
     # when you use fixed point, you cannot use T.grad directly -> bprop modifications.
     def bprop(self, y, t):
