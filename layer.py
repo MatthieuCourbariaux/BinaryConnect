@@ -37,7 +37,7 @@ from format import stochastic_rounding
 
 class linear_layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, BN=False,
+    def __init__(self, rng, n_inputs, n_units, BN=False, BN_epsilon=1e-4,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -49,6 +49,8 @@ class linear_layer(object):
         print "        n_inputs = "+str(n_inputs)
         self.BN = BN
         print "        BN = "+str(BN)
+        self.BN_epsilon = BN_epsilon
+        print "        BN_epsilon = "+str(BN_epsilon)
         
         self.binary_training = binary_training
         print "        binary_training = "+str(binary_training)
@@ -156,7 +158,7 @@ class linear_layer(object):
             var = self.var
         
         if self.BN == True:
-            z = (z - mean)/(T.sqrt(var+1e-9))
+            z = (z - mean)/(T.sqrt(var+self.BN_epsilon))
             z = self.a * z
             
         z = z + self.b
@@ -235,7 +237,7 @@ class ReLU_layer(linear_layer):
         
 class ReLU_conv_layer(linear_layer): 
     
-    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN,
+    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN, BN_epsilon=1e-4,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -259,6 +261,8 @@ class ReLU_conv_layer(linear_layer):
         # print "        partial_sum = "+str(partial_sum)
         self.BN = BN
         print "        BN = "+str(BN)
+        self.BN_epsilon = BN_epsilon
+        print "        BN_epsilon = "+str(BN_epsilon)
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
         
@@ -340,7 +344,7 @@ class ReLU_conv_layer(linear_layer):
             var = self.var
         
         if self.BN == True:
-            z = (z - mean.dimshuffle('x', 0, 'x', 'x'))/(T.sqrt(var.dimshuffle('x', 0, 'x', 'x')+1e-9))
+            z = (z - mean.dimshuffle('x', 0, 'x', 'x'))/(T.sqrt(var.dimshuffle('x', 0, 'x', 'x')+self.BN_epsilon))
             z = self.a.dimshuffle('x', 0, 'x', 'x') * z
         
         # bias
@@ -356,12 +360,9 @@ class ReLU_conv_layer(linear_layer):
         updates = []
         
         if self.BN == True:
-            # does not work ??
-            mean = T.mean(self.z,axis=(2,3))
-            mean2 = T.mean(self.z**2,axis=(2,3))
             
-            updates.append((self.sum, self.sum + T.sum(mean,axis=(0)))) 
-            updates.append((self.sum2, self.sum2 + T.sum(mean-mean2**2,axis=(0)))) 
+            updates.append((self.sum, self.sum + T.sum(T.mean(self.z,axis=(2,3)),axis=(0)))) 
+            updates.append((self.sum2, self.sum2 + T.sum(T.mean(self.z**2,axis=(2,3)),axis=(0)))) 
         
         return updates
         

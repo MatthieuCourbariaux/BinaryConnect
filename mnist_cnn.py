@@ -52,9 +52,9 @@ if __name__ == "__main__":
           
     print 'Loading the dataset' 
     
-    train_set_size = 10000
+    # train_set_size = 10000
     # train_set_size = 128 # for testing data augmentation
-    # train_set_size = 50000 
+    train_set_size = 50000 
     
     train_set = MNIST(which_set= 'train', start=0, stop = train_set_size, center = True)
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
@@ -92,6 +92,7 @@ if __name__ == "__main__":
         def __init__(self, rng):
 
             BN = True
+            BN_epsilon=1e-4
             
             binary_training=False
             # whether quantization is deterministic or stochastic
@@ -123,6 +124,7 @@ if __name__ == "__main__":
                     filter_shape=(n_channels*(i+1), n_channels * i + (i==0), 2, 2),
                     pool_shape=(1,1),
                     BN = BN,
+                    BN_epsilon = BN_epsilon,
                     binary_training=binary_training, 
                     stochastic_training=stochastic_training,
                     binary_test=binary_test, 
@@ -140,6 +142,7 @@ if __name__ == "__main__":
                     filter_shape=(n_channels*(i+1), n_channels*(i+1), 2, 2),
                     pool_shape=(2, 2),
                     BN = BN,
+                    BN_epsilon = BN_epsilon,
                     binary_training=binary_training, 
                     stochastic_training=stochastic_training,
                     binary_test=binary_test, 
@@ -157,6 +160,7 @@ if __name__ == "__main__":
                 filter_shape=(n_channels*(length+1), n_channels*length, 2, 2),
                 pool_shape=(1,1),
                 BN = BN,
+                BN_epsilon = BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
                 binary_test=binary_test, 
@@ -174,6 +178,7 @@ if __name__ == "__main__":
                 filter_shape=(n_channels*(length+2), n_channels*(length+1), 1, 1),
                 pool_shape=(1,1),
                 BN = BN,
+                BN_epsilon = BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
                 binary_test=binary_test, 
@@ -187,6 +192,7 @@ if __name__ == "__main__":
                 n_inputs= n_channels*(length+2)*channel_size*channel_size, 
                 n_units = n_classes, 
                 BN = BN,
+                BN_epsilon = BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
                 binary_test=binary_test, 
@@ -197,11 +203,11 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .01
+    LR = .1
     M= .0
     gpu_batches = train_set_size/batch_size
     n_epoch = 1000
-    monitor_step = 5
+    monitor_step = 10
     LR_decay = .99
     
     trainer = Trainer(rng = rng,
