@@ -299,7 +299,7 @@ class Trainer(object):
             n_remaining_batches = n_batches
         
         # must do it once per layer
-        # could be made more efficient but no time for it
+        # could be made more efficient but no time for it ?
         for k in range(self.model.n_hidden_layers+1):
                        
             for i in range(n_gpu_batches):
