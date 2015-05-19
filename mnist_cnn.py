@@ -52,13 +52,17 @@ if __name__ == "__main__":
           
     print 'Loading the dataset' 
     
-    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
-    # train_set = MNIST(which_set= 'train', start=0, stop = 128, center = True) # for testing data augmentation
+    train_set_size = 10000
+    # train_set_size = 128 # for testing data augmentation
+    # train_set_size = 50000 
+    
+    train_set = MNIST(which_set= 'train', start=0, stop = train_set_size, center = True)
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
     test_set = MNIST(which_set= 'test', center = True)
     
     # bc01 format
-    train_set.X = train_set.X.reshape(50000,1,28,28)
+    # train_set.X = train_set.X.reshape(50000,1,28,28)
+    train_set.X = train_set.X.reshape(train_set_size,1,28,28)
     # train_set.X = train_set.X.reshape(128,1,28,28)
     valid_set.X = valid_set.X.reshape(10000,1,28,28)
     test_set.X = test_set.X.reshape(10000,1,28,28)
@@ -101,7 +105,7 @@ if __name__ == "__main__":
             # architecture
             # greatly inspired from http://arxiv.org/pdf/1412.6071v4.pdf
             channel_size = 30
-            n_channels = 16 # number of channels of the first layer
+            n_channels = 16# number of channels of the first layer
             n_classes = 10
             length = 3 # number of C2-C2-MP2
             n_hidden_layer = (length+1)*2
@@ -162,7 +166,7 @@ if __name__ == "__main__":
             # valid C2
             channel_size = channel_size-1
             
-            print "    C1 layer:"
+            # print "    C1 layer:"
             
             self.layer.append(ReLU_conv_layer(
                 rng,
@@ -193,9 +197,9 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .03
+    LR = .01
     M= .0
-    gpu_batches = 50000/batch_size
+    gpu_batches = train_set_size/batch_size
     n_epoch = 1000
     monitor_step = 5
     LR_decay = .99

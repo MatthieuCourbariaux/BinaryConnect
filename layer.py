@@ -356,9 +356,12 @@ class ReLU_conv_layer(linear_layer):
         updates = []
         
         if self.BN == True:
-        
-            updates.append((self.sum, self.sum + T.sum(T.mean(self.z,axis=(2,3)),axis=(0)))) 
-            updates.append((self.sum2, self.sum2 + T.sum(T.mean(self.z**2,axis=(2,3)),axis=(0)))) 
+            # does not work ??
+            mean = T.mean(self.z,axis=(2,3))
+            mean2 = T.mean(self.z**2,axis=(2,3))
+            
+            updates.append((self.sum, self.sum + T.sum(mean,axis=(0)))) 
+            updates.append((self.sum2, self.sum2 + T.sum(mean-mean2**2,axis=(0)))) 
         
         return updates
         
