@@ -49,21 +49,65 @@ def onehot(x,numclasses=None):
 # MAIN
 
 if __name__ == "__main__":
-          
-    print 'Loading the dataset' 
     
-    # train_set_size = 10000
+    print 'Hyperparameters' 
+    
+    rng = np.random.RandomState(1234)
+    train_set_size = 10000 # for quick test
     # train_set_size = 128 # for testing data augmentation
-    train_set_size = 50000 
+    # train_set_size = 50000 
+    
+    # data augmentation
+    zero_pad = 1
+    affine_transform_a = 0
+    affine_transform_b = 0
+    horizontal_flip = False
+    
+    # batch
+    batch_size = 64
+    gpu_batches = train_set_size/batch_size
+    BN = False
+    BN_epsilon=1e-4
+    BN_batch_size = 10000
+
+    LR = .01
+    LR_decay = .99
+    M= .0
+    
+    n_epoch = 1000
+    monitor_step = 1
+    load_path = None
+    save_path = "best_cnn.pkl"
+    shuffle_examples = True
+    shuffle_batches = False
+    
+    # architecture
+    # greatly inspired from http://arxiv.org/pdf/1412.6071v4.pdf
+    zero_pad = 1
+    channel_size = 30
+    n_channels = 16# number of channels of the first layer
+    n_classes = 10
+    length = 3 # number of C2-C2-MP2
+    n_hidden_layer = (length+1)*2
+    
+    # BinaryConnect
+    binary_training=False
+    # whether quantization is deterministic or stochastic
+    stochastic_training=False
+
+    binary_test=False
+    stochastic_test=False
+    # the number of samples for the monte carlo averaging
+    samples_test = 2
+    
+    print 'Loading the dataset' 
     
     train_set = MNIST(which_set= 'train', start=0, stop = train_set_size, center = True)
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
     test_set = MNIST(which_set= 'test', center = True)
     
     # bc01 format
-    # train_set.X = train_set.X.reshape(50000,1,28,28)
     train_set.X = train_set.X.reshape(train_set_size,1,28,28)
-    # train_set.X = train_set.X.reshape(128,1,28,28)
     valid_set.X = valid_set.X.reshape(10000,1,28,28)
     test_set.X = test_set.X.reshape(10000,1,28,28)
     
@@ -81,38 +125,16 @@ if __name__ == "__main__":
     # print np.shape(train_set.X)
     # print np.max(train_set.X)
     # print np.min(train_set.X)
-        
+    
     print 'Creating the model'
     
-    rng = np.random.RandomState(1234)
-    batch_size = 64
-    
-    class MNIST_model(Network):
+    class DeepCNN(Network):
 
         def __init__(self, rng):
 
-            BN = True
-            BN_epsilon=1e-4
+            Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN, samples_test = samples_test)
             
-            binary_training=False
-            # whether quantization is deterministic or stochastic
-            stochastic_training=False
-            
-            binary_test=False
-            stochastic_test=False
-            # the number of samples for the monte carlo averaging
-            samples_test = 1
-            
-            # architecture
-            # greatly inspired from http://arxiv.org/pdf/1412.6071v4.pdf
-            channel_size = 30
-            n_channels = 16# number of channels of the first layer
-            n_classes = 10
-            length = 3 # number of C2-C2-MP2
-            n_hidden_layer = (length+1)*2
-            
-            Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN, samples_test = samples_test,
-                batch_size=batch_size, n_classes=n_classes)
+            local_channel_size = channel_size
             
             for i in range(length):
                 
@@ -120,7 +142,7 @@ if __name__ == "__main__":
                 
                 self.layer.append(ReLU_conv_layer(
                     rng,
-                    image_shape=(batch_size, n_channels * i + (i==0), channel_size, channel_size),
+                    image_shape=(batch_size, n_channels * i + (i==0), local_channel_size, local_channel_size),
                     filter_shape=(n_channels*(i+1), n_channels * i + (i==0), 2, 2),
                     pool_shape=(1,1),
                     BN = BN,
@@ -132,13 +154,13 @@ if __name__ == "__main__":
                 ))
                 
                 # valid C2
-                channel_size = channel_size-1
+                local_channel_size = local_channel_size-1
                 
                 print "    C2 + MP2 layer:"
                 
                 self.layer.append(ReLU_conv_layer(
                     rng,
-                    image_shape=(batch_size, n_channels*(i+1), channel_size, channel_size),
+                    image_shape=(batch_size, n_channels*(i+1), local_channel_size, local_channel_size),
                     filter_shape=(n_channels*(i+1), n_channels*(i+1), 2, 2),
                     pool_shape=(2, 2),
                     BN = BN,
@@ -150,13 +172,13 @@ if __name__ == "__main__":
                 ))
                 
                 # valid C2 and MP2
-                channel_size = (channel_size-1)/2
+                local_channel_size = (local_channel_size-1)/2
             
             print "    C2 layer:"
             
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, n_channels*length, channel_size, channel_size),
+                image_shape=(batch_size, n_channels*length, local_channel_size, local_channel_size),
                 filter_shape=(n_channels*(length+1), n_channels*length, 2, 2),
                 pool_shape=(1,1),
                 BN = BN,
@@ -168,13 +190,13 @@ if __name__ == "__main__":
             ))
             
             # valid C2
-            channel_size = channel_size-1
+            local_channel_size = local_channel_size-1
             
             # print "    C1 layer:"
             
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, n_channels*(length+1), channel_size, channel_size),
+                image_shape=(batch_size, n_channels*(length+1), local_channel_size, local_channel_size),
                 filter_shape=(n_channels*(length+2), n_channels*(length+1), 1, 1),
                 pool_shape=(1,1),
                 BN = BN,
@@ -189,7 +211,7 @@ if __name__ == "__main__":
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= n_channels*(length+2)*channel_size*channel_size, 
+                n_inputs= n_channels*(length+2)*local_channel_size*local_channel_size, 
                 n_units = n_classes, 
                 BN = BN,
                 BN_epsilon = BN_epsilon,
@@ -199,31 +221,23 @@ if __name__ == "__main__":
                 stochastic_test=stochastic_test
             ))
             
-    model = MNIST_model(rng = rng)
+    model = DeepCNN(rng = rng)
     
     print 'Creating the trainer'
     
-    LR = .1
-    M= .0
-    gpu_batches = train_set_size/batch_size
-    n_epoch = 1000
-    monitor_step = 10
-    LR_decay = .99
-    
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model, load_path = None, save_path = "best_cnn.pkl",
-        zero_pad=1,
-        # affine_transform_a=.1, # for MNIST CNN without zero pad
-        affine_transform_a=0, # a is (more or less) the rotations
-        # affine_transform_b=.5, # for MNIST CNN without zero pad
-        affine_transform_b=0, # b is the translations
-        horizontal_flip=False,
+        model = model, load_path = load_path, save_path = save_path,
+        zero_pad=zero_pad,
+        affine_transform_a=affine_transform_a, # a is (more or less) the rotations
+        affine_transform_b=affine_transform_b, # b is the translations
+        horizontal_flip=horizontal_flip,
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         M = M,
+        BN = BN, BN_batch_size=BN_batch_size,
         batch_size = batch_size, gpu_batches = gpu_batches,
         n_epoch = n_epoch, monitor_step = monitor_step,
-        shuffle_batches = False, shuffle_examples = True)
+        shuffle_batches = shuffle_batches, shuffle_examples = shuffle_examples)
 
     print 'Building'
     

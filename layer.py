@@ -219,7 +219,10 @@ class linear_layer(object):
         updates = []
         
         if self.BN == True:
-        
+            
+            # updates.append((self.mean, mean)) 
+            # updates.append((self.var, var)) 
+            
             updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
             updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
         

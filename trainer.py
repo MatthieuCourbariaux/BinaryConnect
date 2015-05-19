@@ -48,6 +48,7 @@ class Trainer(object):
             model, save_path, load_path,
             LR, LR_decay, LR_fin,
             M, 
+            BN, BN_batch_size,
             batch_size, gpu_batches,
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
@@ -67,6 +68,12 @@ class Trainer(object):
         print '    Learning rate decay = %f' %(LR_decay)
         print '    Final learning rate = %f' %(LR_fin)
         print '    Momentum = %f' %(M)
+        
+        self.BN = BN
+        print "    BN = "+str(BN)
+        self.BN_batch_size = BN_batch_size
+        print "    BN_batch_size = "+str(BN_batch_size)          
+        
         print '    Batch size = %i' %(batch_size)
         print '    gpu_batches = %i' %(gpu_batches)
         print '    Number of epochs = %i' %(n_epoch)
@@ -175,7 +182,8 @@ class Trainer(object):
         self.best_epoch = self.epoch
         
         # set the mean and variance for BN
-        self.set_mean_var(self.train_set)
+        if self.BN == True: 
+            self.set_mean_var(self.train_set)
         
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)
@@ -216,7 +224,8 @@ class Trainer(object):
         # set the mean and variance for BN
         # not on the DA training set
         # because no DA on valid and test
-        self.set_mean_var(self.train_set)
+        if self.BN == True: 
+            self.set_mean_var(self.train_set)
         
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)
@@ -422,9 +431,10 @@ class Trainer(object):
                 name = "test_batch", on_unused_input='warn')
         
         # batch normalization specific functions
-        # I am forced to compute mean and var over the whole datasets because of memory explosion.
-        self.compute_sum_batch = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
-                x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
-                name = "compute_sum_batch", on_unused_input='ignore')
+        if self.BN == True: 
+            self.model.batch_size=self.BN_batch_size
+            self.compute_sum_batch = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
+                    x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
+                    name = "compute_sum_batch", on_unused_input='ignore')
                 
                

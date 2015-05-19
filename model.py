@@ -29,7 +29,7 @@ class Network(object):
     
     layer = []                
     
-    def __init__(self, n_hidden_layer, BN, samples_test, n_classes, batch_size):
+    def __init__(self, n_hidden_layer, BN, samples_test):
         
    
         self.n_hidden_layers = n_hidden_layer
@@ -37,39 +37,34 @@ class Network(object):
         self.BN = BN
         print "    BN = "+str(BN)   
         self.samples_test = samples_test
-        print "    samples_test = "+str(samples_test) 
-        self.n_classes = n_classes
-        print "    n_classes = "+str(n_classes)
-        self.batch_size = batch_size
-        print "    batch_size = "+str(batch_size)        
+        print "    samples_test = "+str(samples_test)     
         
     def fprop(self, x, eval):
         
-        def fprop_step(sum,self=self,x=x,eval=eval):
-        
-            y = self.layer[0].fprop(x, eval)
+        y = self.layer[0].fprop(x, eval)
             
-            for k in range(1,self.n_hidden_layers+1):
-                y = self.layer[k].fprop(y, eval)
-                
-            return sum + y
-        
-        # outputs_info is the initial value of the sum
-        # sum = T.zeros_like(self.layer[self.n_hidden_layers].y)
-        
-        sum = np.zeros((self.batch_size,self.n_classes), dtype=theano.config.floatX)
+        for k in range(1,self.n_hidden_layers+1):
+            y = self.layer[k].fprop(y, eval)
         
         if eval==True:
             
+            # outputs_info is the initial value of the sum
+            sum = T.zeros_like(y)
+            
+            def fprop_step(sum,self=self,x=x,eval=eval):
+                
+                y = self.layer[0].fprop(x, eval)
+                
+                for k in range(1,self.n_hidden_layers+1):
+                    y = self.layer[k].fprop(y, eval)
+                    
+                return sum + y     
+        
             # the sum is computed recursively with fprop_step
             values, updates = theano.scan(fprop_step, outputs_info=sum, n_steps=self.samples_test)
             
             # no need to divide by the number of classes as it has no impact on argmax
-            # y = values[-1]/np.float32(10.)
             y = values[-1]
-            
-        else:
-            y = fprop_step(sum)
         
         return y
 
