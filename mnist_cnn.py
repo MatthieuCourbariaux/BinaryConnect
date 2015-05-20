@@ -53,7 +53,7 @@ if __name__ == "__main__":
     print 'Hyperparameters' 
     
     rng = np.random.RandomState(1234)
-    train_set_size = 10000
+    train_set_size = 50000
     # train_set_size = 128 # for testing data augmentation
     
     # data augmentation
