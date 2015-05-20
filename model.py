@@ -73,21 +73,21 @@ class Network(object):
         for k in range(self.n_hidden_layers,-1,-1):
             self.layer[k].bprop(cost)
     
-    def BN_sums(self,x):
+    def BN_updates(self,x):
         
         y = self.fprop(x=x,eval=False) 
         
-        updates = self.layer[0].BN_sums()
+        updates = self.layer[0].BN_updates()
         for k in range(1,self.n_hidden_layers+1):
-            updates = updates + self.layer[k].BN_sums()
+            updates = updates + self.layer[k].BN_updates()
         
         return updates
         
-    def BN_mean_var(self,n_samples):
+    def BN_reset(self):
         
-        updates = self.layer[0].BN_mean_var(n_samples)
+        updates = self.layer[0].BN_reset()
         for k in range(1,self.n_hidden_layers+1):
-            updates = updates + self.layer[k].BN_mean_var(n_samples)
+            updates = updates + self.layer[k].BN_reset()
         
         return updates
     

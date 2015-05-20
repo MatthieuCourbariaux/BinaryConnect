@@ -155,7 +155,19 @@ class Trainer(object):
                 # DA_set.X[i] = rotate(DA_set.X[i].reshape(28,28),angle, reshape=False).reshape(784)
         
         return DA_set
+    
+    def set_BN_mean_var(self):
+            
+        # reset cumulative mean and var
+        self.reset_mean_var()
         
+        # not on the DA training set
+        # because no DA on valid and test
+        self.set_mean_var(self.train_set)
+        self.set_mean_var(self.valid_set)
+                
+        return
+    
     def window_flip(self,set):
         
         DA_set = dataset(set)
@@ -181,7 +193,7 @@ class Trainer(object):
         
         # set the mean and variance for BN
         if self.BN == True: 
-            self.set_mean_var(self.train_set)
+            self.set_BN_mean_var()
         
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)
@@ -223,7 +235,7 @@ class Trainer(object):
         # not on the DA training set
         # because no DA on valid and test
         if self.BN == True: 
-            self.set_mean_var(self.train_set)
+            self.set_BN_mean_var()
         
         # test it on the validation set
         self.validation_ER = self.test_epoch(self.valid_set)
@@ -315,7 +327,7 @@ class Trainer(object):
             
             for j in range(self.gpu_batches): 
 
-                self.BN_sums(j)
+                self.BN_updates(j)
         
         # load the last incomplete gpu batch of batches
         if n_remaining_batches > 0:
@@ -326,11 +338,7 @@ class Trainer(object):
             
             for j in range(n_remaining_batches): 
 
-                self.BN_sums(j)
-        
-        # set the mean and the var of BN
-        n_samples = n_batches*self.batch_size
-        self.BN_mean_var(n_samples)
+                self.BN_updates(j)
         
         return
     
@@ -422,10 +430,10 @@ class Trainer(object):
         
             # batch normalization specific functions
             # I am forced to compute mean and var incrementally because of memory explosion.
-            self.BN_sums = theano.function(inputs = [index], updates=self.model.BN_sums(x), givens={
+            self.BN_updates = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
                     x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
-                    name = "BN_sums", on_unused_input='ignore')
+                    name = "BN_updates", on_unused_input='ignore')
                     
-            self.BN_mean_var = theano.function(inputs = [n_samples], updates=self.model.BN_mean_var(n_samples),
-                    name = "BN_mean_var", on_unused_input='ignore')                
+            self.reset_mean_var = theano.function(inputs = [], updates=self.model.BN_reset(),
+                    name = "reset_mean_var")            
                

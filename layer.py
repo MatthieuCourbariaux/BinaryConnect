@@ -77,8 +77,7 @@ class linear_layer(object):
         
         self.mean = theano.shared(value=b_values, name='mean')
         self.var = theano.shared(value=b_values, name='var')
-        self.sum = theano.shared(value=b_values, name='sum')
-        self.sum2 = theano.shared(value=b_values, name='sum2')
+        self.n_samples = theano.shared(value=np.float32(0),name='n_samples')
         
         # momentum
         self.update_W = theano.shared(value=np.zeros((n_inputs, n_units), dtype=theano.config.floatX), name='update_W')
@@ -151,9 +150,12 @@ class linear_layer(object):
         # batch normalization
         if self.BN == True:
             
+            self.batch_mean = T.mean(z,axis=0)
+            self.batch_var = T.var(z,axis=0)
+            
             if eval == False:
-                mean = T.mean(z,axis=0)
-                var = T.var(z,axis=0)
+                mean = self.batch_mean
+                var = self.batch_var
 
             else:
                 mean = self.mean
@@ -161,7 +163,7 @@ class linear_layer(object):
         
             z = (z - mean)/(T.sqrt(var+self.BN_epsilon))
             z = self.a * z
-            
+        
         z = z + self.b
         
         # activation function
@@ -215,34 +217,29 @@ class linear_layer(object):
 
         return updates
     
-    def BN_sums(self):
+    def BN_updates(self):
         
         updates = []
         
-        updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
-        updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
+        # batch_size = T.shape(self.z)[0]
+        new_n_samples = self.n_samples + 1
+        
+        new_mean = (self.n_samples/new_n_samples) * self.mean + (1/new_n_samples) * self.batch_mean
+        # very sligthly biased variance estimation
+        new_var = (self.n_samples/new_n_samples) * self.var + (1/(new_n_samples)) * self.batch_var
+        
+        updates.append((self.n_samples, new_n_samples)) 
+        updates.append((self.mean, new_mean))
+        updates.append((self.var, new_var))
         
         return updates
         
-    def BN_mean_var(self,n_samples):
-        
+    def BN_reset(self):
+    
         updates = []
         
-        # reset the sums
-        updates.append((self.sum, 0.* self.sum))
-        updates.append((self.sum2, 0.* self.sum2))
-        
-        # casting for the GPU
-        n_samples = T.cast(n_samples,dtype=theano.config.floatX)
-        
-        # compute the mean and variance
-        mean = self.sum/n_samples
-        mean2 = self.sum2/n_samples
-        
-        updates.append((self.mean, mean))
-        
-        # variance = mean(x^2) - mean(x)^2
-        updates.append((self.var, mean2 - mean**2))
+        updates.append((self.mean, self.mean*0.)) 
+        updates.append((self.var, self.var*0.))
         
         return updates
 
@@ -308,8 +305,7 @@ class ReLU_conv_layer(linear_layer):
         
         self.mean = theano.shared(value=b_values, name='mean')
         self.var = theano.shared(value=b_values, name='var')
-        self.sum = theano.shared(value=b_values, name='sum')
-        self.sum2 = theano.shared(value=b_values, name='sum2')
+        self.n_samples = theano.shared(value=np.float32(0),name='n_samples')
         
         # momentum
         self.update_W = theano.shared(value=np.zeros(self.filter_shape, dtype=theano.config.floatX), name='update_W')
@@ -337,10 +333,13 @@ class ReLU_conv_layer(linear_layer):
         if self.BN == True:
             
             # in the convolutional case, there is only a mean per feature map and not per location
-            # http://arxiv.org/pdf/1502.03167v3.pdf           
+            # http://arxiv.org/pdf/1502.03167v3.pdf   
+            self.batch_mean = T.mean(z,axis=(0,2,3))
+            self.batch_var = T.var(z,axis=(0,2,3))
+                    
             if eval == False:
-                mean = T.mean(z,axis=(0,2,3))
-                var = T.var(z,axis=(0,2,3))
+                mean = self.batch_mean
+                var = self.batch_var
 
             else:
                 mean = self.mean
@@ -356,15 +355,6 @@ class ReLU_conv_layer(linear_layer):
         y = self.activation(z)
         
         return y
-    
-    def BN_sums(self):
-        
-        updates = []
-        
-        updates.append((self.sum, self.sum + T.sum(T.mean(self.z,axis=(2,3)),axis=0))) 
-        updates.append((self.sum2, self.sum2 + T.sum(T.mean(self.z**2,axis=(2,3)),axis=0)))
-        
-        return updates
     
     def activation(self,z):
     
