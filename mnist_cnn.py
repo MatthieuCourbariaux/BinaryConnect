@@ -53,7 +53,7 @@ if __name__ == "__main__":
     print 'Hyperparameters' 
     
     rng = np.random.RandomState(1234)
-    train_set_size = 50000
+    train_set_size = 10000
     # train_set_size = 128 # for testing data augmentation
     
     # data augmentation
@@ -67,7 +67,6 @@ if __name__ == "__main__":
     gpu_batches = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
-    BN_alpha=.1 # moving average
     shuffle_examples = True
     shuffle_batches = False
 
@@ -142,9 +141,8 @@ if __name__ == "__main__":
                     image_shape=(batch_size, n_channels * i + (i==0), local_channel_size, local_channel_size),
                     filter_shape=(n_channels*(i+1), n_channels * i + (i==0), 2, 2),
                     pool_shape=(1,1),
-                    BN = BN, 
-                    BN_epsilon = BN_epsilon,
-                    BN_alpha=BN_alpha,
+                    BN = BN,                     
+                    BN_epsilon=BN_epsilon,
                     binary_training=binary_training, 
                     stochastic_training=stochastic_training,
                     binary_test=binary_test, 
@@ -162,8 +160,7 @@ if __name__ == "__main__":
                     filter_shape=(n_channels*(i+1), n_channels*(i+1), 2, 2),
                     pool_shape=(2, 2),
                     BN = BN,
-                    BN_epsilon = BN_epsilon,
-                    BN_alpha=BN_alpha,
+                    BN_epsilon=BN_epsilon,
                     binary_training=binary_training, 
                     stochastic_training=stochastic_training,
                     binary_test=binary_test, 
@@ -181,8 +178,7 @@ if __name__ == "__main__":
                 filter_shape=(n_channels*(length+1), n_channels*length, 2, 2),
                 pool_shape=(1,1),
                 BN = BN,
-                BN_epsilon = BN_epsilon,
-                BN_alpha=BN_alpha,
+                BN_epsilon=BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
                 binary_test=binary_test, 
@@ -200,8 +196,7 @@ if __name__ == "__main__":
                 filter_shape=(n_channels*(length+2), n_channels*(length+1), 1, 1),
                 pool_shape=(1,1),
                 BN = BN,
-                BN_epsilon = BN_epsilon,
-                BN_alpha=BN_alpha,
+                BN_epsilon=BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
                 binary_test=binary_test, 
@@ -215,8 +210,7 @@ if __name__ == "__main__":
                 n_inputs= n_channels*(length+2)*local_channel_size*local_channel_size, 
                 n_units = n_classes, 
                 BN = BN,
-                BN_epsilon = BN_epsilon,
-                BN_alpha=BN_alpha,
+                BN_epsilon=BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
                 binary_test=binary_test, 

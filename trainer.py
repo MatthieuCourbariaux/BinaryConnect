@@ -295,6 +295,8 @@ class Trainer(object):
                 self.train_batch(j, self.LR, self.M)
     
     # batch normalization function
+    # not exactly True, but seems to do the job well enough.
+    # the problem is that I only compute the true mean and var for the first layer.
     def set_mean_var(self, set):
         
         n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
@@ -313,7 +315,7 @@ class Trainer(object):
             
             for j in range(self.gpu_batches): 
 
-                self.compute_mean_var(j)
+                self.BN_sums(j)
         
         # load the last incomplete gpu batch of batches
         if n_remaining_batches > 0:
@@ -324,7 +326,11 @@ class Trainer(object):
             
             for j in range(n_remaining_batches): 
 
-                self.compute_mean_var(j)
+                self.BN_sums(j)
+        
+        # set the mean and the var of BN
+        n_samples = n_batches*self.batch_size
+        self.BN_mean_var(n_samples)
         
         return
     
@@ -413,8 +419,13 @@ class Trainer(object):
         
         # batch normalization specific functions
         if self.BN == True: 
-            self.compute_mean_var = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
+        
+            # batch normalization specific functions
+            # I am forced to compute mean and var incrementally because of memory explosion.
+            self.BN_sums = theano.function(inputs = [index], updates=self.model.BN_sums(x), givens={
                     x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
-                    name = "compute_mean_var", on_unused_input='ignore')
-                
+                    name = "BN_sums", on_unused_input='ignore')
+                    
+            self.BN_mean_var = theano.function(inputs = [n_samples], updates=self.model.BN_mean_var(n_samples),
+                    name = "BN_mean_var", on_unused_input='ignore')                
                

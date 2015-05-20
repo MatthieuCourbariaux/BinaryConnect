@@ -37,7 +37,7 @@ from format import stochastic_rounding
 
 class linear_layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, BN=False, BN_epsilon=1e-4, BN_alpha=.1,
+    def __init__(self, rng, n_inputs, n_units, BN=False, BN_epsilon=1e-4,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -51,8 +51,6 @@ class linear_layer(object):
         print "        BN = "+str(BN)
         self.BN_epsilon = BN_epsilon
         print "        BN_epsilon = "+str(BN_epsilon)
-        self.BN_alpha = BN_alpha
-        print "        BN_alpha = "+str(BN_alpha)
         
         self.binary_training = binary_training
         print "        binary_training = "+str(binary_training)
@@ -153,12 +151,9 @@ class linear_layer(object):
         # batch normalization
         if self.BN == True:
             
-            self.batch_mean = T.mean(z,axis=0)
-            self.batch_var = T.var(z,axis=0)
-            
             if eval == False:
-                mean = self.batch_mean
-                var = self.batch_var
+                mean = T.mean(z,axis=0)
+                var = T.var(z,axis=0)
 
             else:
                 mean = self.mean
@@ -220,18 +215,34 @@ class linear_layer(object):
 
         return updates
     
-    def BN_updates(self):
+    def BN_sums(self):
         
         updates = []
-            
-        alpha = self.BN_alpha
-        new_mean = alpha * self.batch_mean + (1-alpha) * self.mean
         
-        # Pb: this estimation of the variance might be wrong
-        new_var = alpha * self.batch_var + (1-alpha) * self.var
+        updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
+        updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
         
-        updates.append((self.mean, new_mean)) 
-        updates.append((self.var, new_var))
+        return updates
+        
+    def BN_mean_var(self,n_samples):
+        
+        updates = []
+        
+        # reset the sums
+        updates.append((self.sum, 0.* self.sum))
+        updates.append((self.sum2, 0.* self.sum2))
+        
+        # casting for the GPU
+        n_samples = T.cast(n_samples,dtype=theano.config.floatX)
+        
+        # compute the mean and variance
+        mean = self.sum/n_samples
+        mean2 = self.sum2/n_samples
+        
+        updates.append((self.mean, mean))
+        
+        # variance = mean(x^2) - mean(x)^2
+        updates.append((self.var, mean2 - mean**2))
         
         return updates
 
@@ -247,7 +258,7 @@ class ReLU_layer(linear_layer):
         
 class ReLU_conv_layer(linear_layer): 
     
-    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN, BN_epsilon=1e-4, BN_alpha=.1,
+    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN, BN_epsilon=1e-4,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -255,26 +266,14 @@ class ReLU_conv_layer(linear_layer):
         
         self.image_shape = image_shape
         print "        image_shape = "+str(image_shape)
-        # self.zero_pad = zero_pad
-        # print "        zero_pad = "+str(zero_pad)
         self.filter_shape = filter_shape
         print "        filter_shape = "+str(filter_shape)
-        # self.filter_stride = filter_stride
-        # print "        filter_stride = "+str(filter_stride)
         self.pool_shape = pool_shape
         print "        pool_shape = "+str(pool_shape)
-        # self.pool_stride = pool_stride
-        # print "        pool_stride = "+str(pool_stride)
-        # self.output_shape = output_shape
-        # print "        output_shape = "+str(output_shape)         
-        # self.partial_sum = partial_sum
-        # print "        partial_sum = "+str(partial_sum)
         self.BN = BN
         print "        BN = "+str(BN)
         self.BN_epsilon = BN_epsilon
         print "        BN_epsilon = "+str(BN_epsilon)
-        self.BN_alpha = BN_alpha
-        print "        BN_alpha = "+str(BN_alpha)
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
         
@@ -325,18 +324,9 @@ class ReLU_conv_layer(linear_layer):
         self.Wb = self.binarize_weights(self.W)
         
         # convolution
-        # x = x.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        # W = self.Wb.dimshuffle(1, 2, 3, 0) # bc01 to c01b
-        # conv_op = FilterActs(stride=self.filter_stride, partial_sum=self.partial_sum,pad = self.zero_pad)
-        # x = gpu_contiguous(x)
-        # W = gpu_contiguous(W)
-        # z = conv_op(x, W)
         z = T.nnet.conv.conv2d(x, self.Wb, border_mode='valid')
 
         # Maxpooling
-        # pool_op = MaxPool(ds=self.pool_shape, stride=self.pool_stride)
-        # z = pool_op(z)
-        # z = z.dimshuffle(3, 0, 1, 2) # c01b to bc01
         if self.pool_shape != (1,1):
             z = T.signal.downsample.max_pool_2d(input=z, ds=self.pool_shape)
         
@@ -347,13 +337,10 @@ class ReLU_conv_layer(linear_layer):
         if self.BN == True:
             
             # in the convolutional case, there is only a mean per feature map and not per location
-            # http://arxiv.org/pdf/1502.03167v3.pdf
-            self.batch_mean = T.mean(z,axis=(0,2,3))
-            self.batch_var = T.var(z,axis=(0,2,3))
-            
+            # http://arxiv.org/pdf/1502.03167v3.pdf           
             if eval == False:
-                mean = self.batch_mean
-                var = self.batch_var
+                mean = T.mean(z,axis=(0,2,3))
+                var = T.var(z,axis=(0,2,3))
 
             else:
                 mean = self.mean
@@ -369,7 +356,16 @@ class ReLU_conv_layer(linear_layer):
         y = self.activation(z)
         
         return y
+    
+    def BN_sums(self):
         
+        updates = []
+        
+        updates.append((self.sum, self.sum + T.sum(T.mean(self.z,axis=(2,3)),axis=0))) 
+        updates.append((self.sum2, self.sum2 + T.sum(T.mean(self.z**2,axis=(2,3)),axis=0)))
+        
+        return updates
+    
     def activation(self,z):
     
         return T.maximum(z*.01,z)

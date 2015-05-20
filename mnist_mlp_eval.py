@@ -67,7 +67,6 @@ if __name__ == "__main__":
     gpu_batches = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
-    BN_alpha=.0 # moving average 
     shuffle_examples = True
     shuffle_batches = False
 
@@ -129,22 +128,22 @@ if __name__ == "__main__":
             Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN)
             
             print "    Fully connected layer 1:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, BN_alpha=BN_alpha,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 2:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, BN_alpha=BN_alpha,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 3:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, BN_alpha=BN_alpha,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
-            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes, BN = BN, BN_epsilon=BN_epsilon, BN_alpha=BN_alpha,
+            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
     
