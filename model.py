@@ -99,10 +99,8 @@ class Network(object):
     def errors(self, x, t):
         
         y = self.fprop(x=x,eval=True)
-        # z = self.layer[self.n_hidden_layers].z
         
         # error function
-        # errors = T.sum(T.neq(T.argmax(z, axis=1), T.argmax(t, axis=1)))
         errors = T.sum(T.neq(T.argmax(y, axis=1), T.argmax(t, axis=1)))
         
         return errors

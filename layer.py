@@ -37,7 +37,7 @@ from format import stochastic_rounding
 
 class linear_layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, BN=False, BN_epsilon=1e-4,
+    def __init__(self, rng, n_inputs, n_units, BN=False, BN_epsilon=1e-4, BN_alpha=.1,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -51,6 +51,8 @@ class linear_layer(object):
         print "        BN = "+str(BN)
         self.BN_epsilon = BN_epsilon
         print "        BN_epsilon = "+str(BN_epsilon)
+        self.BN_alpha = BN_alpha
+        print "        BN_alpha = "+str(BN_alpha)
         
         self.binary_training = binary_training
         print "        binary_training = "+str(binary_training)
@@ -149,15 +151,19 @@ class linear_layer(object):
         self.z = z
         
         # batch normalization
-        if eval == False:
-            mean = T.mean(z,axis=0)
-            var = T.var(z,axis=0)
-            
-        else:
-            mean = self.mean
-            var = self.var
-        
         if self.BN == True:
+            
+            self.batch_mean = T.mean(z,axis=0)
+            self.batch_var = T.var(z,axis=0)
+            
+            if eval == False:
+                mean = self.batch_mean
+                var = self.batch_var
+
+            else:
+                mean = self.mean
+                var = self.var
+        
             z = (z - mean)/(T.sqrt(var+self.BN_epsilon))
             z = self.a * z
             
@@ -217,14 +223,15 @@ class linear_layer(object):
     def BN_updates(self):
         
         updates = []
+            
+        alpha = self.BN_alpha
+        new_mean = alpha * self.batch_mean + (1-alpha) * self.mean
         
-        if self.BN == True:
-            
-            # updates.append((self.mean, mean)) 
-            # updates.append((self.var, var)) 
-            
-            updates.append((self.sum, self.sum + T.sum(self.z,axis=0))) 
-            updates.append((self.sum2, self.sum2 + T.sum(self.z**2,axis=0)))
+        # Pb: this estimation of the variance might be wrong
+        new_var = alpha * self.batch_var + (1-alpha) * self.var
+        
+        updates.append((self.mean, new_mean)) 
+        updates.append((self.var, new_var))
         
         return updates
 
@@ -240,7 +247,7 @@ class ReLU_layer(linear_layer):
         
 class ReLU_conv_layer(linear_layer): 
     
-    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN, BN_epsilon=1e-4,
+    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN, BN_epsilon=1e-4, BN_alpha=.1,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -266,6 +273,8 @@ class ReLU_conv_layer(linear_layer):
         print "        BN = "+str(BN)
         self.BN_epsilon = BN_epsilon
         print "        BN_epsilon = "+str(BN_epsilon)
+        self.BN_alpha = BN_alpha
+        print "        BN_alpha = "+str(BN_alpha)
         # self.W_lr_scale = W_lr_scale
         # print "    W_lr_scale = "+str(W_lr_scale)
         
@@ -335,18 +344,21 @@ class ReLU_conv_layer(linear_layer):
         self.z = z
         
         # batch normalization
-        if eval == False:
+        if self.BN == True:
             
             # in the convolutional case, there is only a mean per feature map and not per location
             # http://arxiv.org/pdf/1502.03167v3.pdf
-            mean = T.mean(z,axis=(0,2,3))
-            var = T.var(z,axis=(0,2,3))
+            self.batch_mean = T.mean(z,axis=(0,2,3))
+            self.batch_var = T.var(z,axis=(0,2,3))
             
-        else:
-            mean = self.mean
-            var = self.var
+            if eval == False:
+                mean = self.batch_mean
+                var = self.batch_var
+
+            else:
+                mean = self.mean
+                var = self.var
         
-        if self.BN == True:
             z = (z - mean.dimshuffle('x', 0, 'x', 'x'))/(T.sqrt(var.dimshuffle('x', 0, 'x', 'x')+self.BN_epsilon))
             z = self.a.dimshuffle('x', 0, 'x', 'x') * z
         
@@ -357,17 +369,6 @@ class ReLU_conv_layer(linear_layer):
         y = self.activation(z)
         
         return y
-        
-    def BN_updates(self):
-        
-        updates = []
-        
-        if self.BN == True:
-            
-            updates.append((self.sum, self.sum + T.sum(T.mean(self.z,axis=(2,3)),axis=(0)))) 
-            updates.append((self.sum2, self.sum2 + T.sum(T.mean(self.z**2,axis=(2,3)),axis=(0)))) 
-        
-        return updates
         
     def activation(self,z):
     

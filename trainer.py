@@ -48,7 +48,7 @@ class Trainer(object):
             model, save_path, load_path,
             LR, LR_decay, LR_fin,
             M, 
-            BN, BN_batch_size,
+            BN,
             batch_size, gpu_batches,
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
@@ -70,9 +70,7 @@ class Trainer(object):
         print '    Momentum = %f' %(M)
         
         self.BN = BN
-        print "    BN = "+str(BN)
-        self.BN_batch_size = BN_batch_size
-        print "    BN_batch_size = "+str(BN_batch_size)          
+        print "    BN = "+str(BN)        
         
         print '    Batch size = %i' %(batch_size)
         print '    gpu_batches = %i' %(gpu_batches)
@@ -306,44 +304,27 @@ class Trainer(object):
             n_remaining_batches = n_batches%self.gpu_batches
         else:
             n_remaining_batches = n_batches
-        
-        # must do it once per layer
-        # could be made more efficient but no time for it ?
-        for k in range(self.model.n_hidden_layers+1):
                        
-            for i in range(n_gpu_batches):
+        for i in range(n_gpu_batches):
+        
+            self.load_shared_dataset(set,
+                start=i*self.gpu_batches,
+                size=self.gpu_batches)
             
-                self.load_shared_dataset(set,
-                    start=i*self.gpu_batches,
-                    size=self.gpu_batches)
-                
-                for j in range(self.gpu_batches): 
+            for j in range(self.gpu_batches): 
 
-                    self.compute_sum_batch(j)
+                self.compute_mean_var(j)
+        
+        # load the last incomplete gpu batch of batches
+        if n_remaining_batches > 0:
+        
+            self.load_shared_dataset(set,
+                    start=n_gpu_batches*self.gpu_batches,
+                    size=n_remaining_batches)
             
-            # load the last incomplete gpu batch of batches
-            if n_remaining_batches > 0:
-            
-                self.load_shared_dataset(set,
-                        start=n_gpu_batches*self.gpu_batches,
-                        size=n_remaining_batches)
-                
-                for j in range(n_remaining_batches): 
+            for j in range(n_remaining_batches): 
 
-                    self.compute_sum_batch(j)
-            
-            # set the mean and var of the k th layer
-            n_samples = n_batches*self.batch_size
-            mean = self.model.layer[k].sum.get_value()/n_samples
-            mean2 = self.model.layer[k].sum2.get_value()/n_samples
-            
-            self.model.layer[k].mean.set_value(mean)
-            # variance = mean(x^2) - mean(x)^2
-            self.model.layer[k].var.set_value(mean2 - mean**2)
-            # reset the sums
-            for l in range(self.model.n_hidden_layers+1):
-                self.model.layer[l].sum.set_value(0*self.model.layer[l].sum.get_value())
-                self.model.layer[l].sum2.set_value(0*self.model.layer[l].sum2.get_value())   
+                self.compute_mean_var(j)
         
         return
     
@@ -432,9 +413,8 @@ class Trainer(object):
         
         # batch normalization specific functions
         if self.BN == True: 
-            self.model.batch_size=self.BN_batch_size
-            self.compute_sum_batch = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
+            self.compute_mean_var = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
                     x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
-                    name = "compute_sum_batch", on_unused_input='ignore')
+                    name = "compute_mean_var", on_unused_input='ignore')
                 
                
