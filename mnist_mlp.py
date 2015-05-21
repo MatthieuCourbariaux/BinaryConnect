@@ -64,11 +64,9 @@ if __name__ == "__main__":
     
     # batch
     # keep a multiple of 16 and a factor of 10000 if possible
-    train_batch_size = 80
-    number_of_train_batches_on_gpu = train_set_size/train_batch_size
     # e.g. 80, 400, 2000, ...
-    test_batch_size = 400 
-    number_of_test_batches_on_gpu = 10000/test_batch_size
+    batch_size = 80
+    number_of_batches_on_gpu = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     shuffle_examples = True
@@ -164,8 +162,7 @@ if __name__ == "__main__":
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         M = M,
         BN = BN,
-        train_batch_size = train_batch_size, number_of_train_batches_on_gpu = number_of_train_batches_on_gpu,
-        test_batch_size = test_batch_size, number_of_test_batches_on_gpu = number_of_test_batches_on_gpu, 
+        batch_size = batch_size, number_of_batches_on_gpu = number_of_batches_on_gpu,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = shuffle_batches, shuffle_examples = shuffle_examples)
     

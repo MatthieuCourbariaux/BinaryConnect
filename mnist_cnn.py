@@ -54,7 +54,8 @@ if __name__ == "__main__":
     
     rng = np.random.RandomState(1234)
     train_set_size = 50000
-    # train_set_size = 128 # for testing data augmentation
+    # train_set_size = 10000 # for quick experiments
+    # train_set_size = 80 # for testing data augmentation
     
     # data augmentation
     zero_pad = 1
@@ -63,8 +64,11 @@ if __name__ == "__main__":
     horizontal_flip = False
     
     # batch
-    batch_size = 64
-    gpu_batches = train_set_size/batch_size
+    # keep a multiple of 16 and a factor of 10000 if possible
+    # e.g. 80, 400, 2000, ...
+    batch_size = 80
+    number_of_batches_on_gpu = train_set_size/batch_size
+    
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     shuffle_examples = True
@@ -77,13 +81,12 @@ if __name__ == "__main__":
     
     # Termination criteria
     n_epoch = 1000
-    monitor_step = 1
+    monitor_step = 4
     load_path = None
     save_path = "best_cnn.pkl"
     
     # architecture
     # greatly inspired from http://arxiv.org/pdf/1412.6071v4.pdf
-    zero_pad = 1
     channel_size = 30
     n_channels = 16# number of channels of the first layer
     n_classes = 10
@@ -231,10 +234,10 @@ if __name__ == "__main__":
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         M = M,
         BN = BN,
-        batch_size = batch_size, gpu_batches = gpu_batches,
+        batch_size = batch_size, number_of_batches_on_gpu = number_of_batches_on_gpu,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = shuffle_batches, shuffle_examples = shuffle_examples)
-
+    
     print 'Building'
     
     trainer.build()
@@ -272,3 +275,4 @@ if __name__ == "__main__":
     # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
     # plt.imshow(W, cmap = cm.Greys_r)
     # plt.show()
+
