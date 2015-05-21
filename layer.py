@@ -248,6 +248,7 @@ class linear_layer(object):
         
         updates.append((self.mean, self.mean*0.)) 
         updates.append((self.var, self.var*0.))
+        updates.append((self.n_samples, self.n_samples*0.))
         
         return updates
 
