@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # train_set_size = 128 # for testing data augmentation
     
     # data augmentation
-    zero_pad = 1
+    zero_pad = 0
     affine_transform_a = 0
     affine_transform_b = 0
     horizontal_flip = False
@@ -86,7 +86,6 @@ if __name__ == "__main__":
     save_path = None
     
     # architecture
-    zero_pad = 0
     n_units = 1024
     n_classes = 10
     n_hidden_layer = 3
