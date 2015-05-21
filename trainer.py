@@ -319,34 +319,38 @@ class Trainer(object):
     # the problem is that I only compute the true mean and var for the first layer.
     def set_mean_var(self, set):
         
-        n_batches = np.int(np.floor(set.X.shape[0]/self.train_batch_size))
-        n_number_of_batches_on_gpu = np.int(np.floor(n_batches/self.number_of_train_batches_on_gpu))
+        n_batches = np.int(np.floor(set.X.shape[0]/self.test_batch_size))
+        n_number_of_batches_on_gpu = np.int(np.floor(n_batches/self.number_of_test_batches_on_gpu))
         
-        if self.number_of_train_batches_on_gpu<=n_batches:
-            n_remaining_batches = n_batches%self.number_of_train_batches_on_gpu
+        if self.number_of_test_batches_on_gpu<=n_batches:
+            n_remaining_batches = n_batches%self.number_of_test_batches_on_gpu
         else:
             n_remaining_batches = n_batches
-                       
-        for i in range(n_number_of_batches_on_gpu):
         
-            self.load_shared_dataset(set,
-                start=i*self.number_of_train_batches_on_gpu*self.train_batch_size,
-                size=self.number_of_train_batches_on_gpu*self.train_batch_size)
+        # have to compute mean and var for each layer
+        # cannot do all at the same time because of memory
+        for k in range(self.model.n_hidden_layers+1):
+        
+            for i in range(n_number_of_batches_on_gpu):
             
-            for j in range(self.number_of_train_batches_on_gpu): 
+                self.load_shared_dataset(set,
+                    start=i*self.number_of_test_batches_on_gpu*self.test_batch_size,
+                    size=self.number_of_test_batches_on_gpu*self.test_batch_size)
+                
+                for j in range(self.number_of_test_batches_on_gpu): 
 
-                self.BN_updates(j)
-        
-        # load the last incomplete gpu batch of batches
-        if n_remaining_batches > 0:
-        
-            self.load_shared_dataset(set,
-                    start=n_number_of_batches_on_gpu*self.number_of_train_batches_on_gpu,
-                    size=n_remaining_batches)
+                    self.BN_updates[k](j)
             
-            for j in range(n_remaining_batches): 
+            # load the last incomplete gpu batch of batches
+            if n_remaining_batches > 0:
+            
+                self.load_shared_dataset(set,
+                        start=n_number_of_batches_on_gpu*self.number_of_test_batches_on_gpu,
+                        size=n_remaining_batches)
+                
+                for j in range(n_remaining_batches): 
 
-                self.BN_updates(j)
+                    self.BN_updates[k](j)
         
         return
     
@@ -415,8 +419,7 @@ class Trainer(object):
         # input and output variables
         x = T.tensor4('x')
         y = T.matrix('y')
-        index = T.lscalar('index') 
-        n_samples = T.lscalar('n_samples') 
+        index = T.scalar('index', dtype='int64') 
         LR = T.scalar('LR', dtype=theano.config.floatX)
         M = T.scalar('M', dtype=theano.config.floatX)
 
@@ -437,10 +440,12 @@ class Trainer(object):
         if self.BN == True: 
         
             # batch normalization specific functions
-            # I am forced to compute mean and var incrementally because of memory explosion.
-            self.BN_updates = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
-                    x: self.shared_x[index * self.train_batch_size:(index + 1) * self.train_batch_size]},
-                    name = "BN_updates", on_unused_input='ignore')
+            # I am forced to compute mean and var incrementally because of memory constraints.
+            self.BN_updates = []
+            for k in range(self.model.n_hidden_layers+1):
+                self.BN_updates.append(theano.function(inputs = [index], updates=self.model.BN_updates(k,x), givens={
+                        x: self.shared_x[index * self.test_batch_size:(index + 1) * self.test_batch_size]},
+                        name = "BN_updates", on_unused_input='ignore'))
                     
             self.reset_mean_var = theano.function(inputs = [], updates=self.model.BN_reset(),
                     name = "reset_mean_var")            

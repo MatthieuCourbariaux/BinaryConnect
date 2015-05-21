@@ -63,9 +63,11 @@ if __name__ == "__main__":
     horizontal_flip = False
     
     # batch
-    train_batch_size = 50000
+    # keep a multiple of 16 and a factor of 10000 if possible
+    train_batch_size = 80
     number_of_train_batches_on_gpu = train_set_size/train_batch_size
-    test_batch_size = 10000
+    # e.g. 80, 400, 2000, ...
+    test_batch_size = 400 
     number_of_test_batches_on_gpu = 10000/test_batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
