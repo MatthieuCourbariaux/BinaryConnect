@@ -86,7 +86,7 @@ class linear_layer(object):
     def activation(self, z):
         return z
     
-    def binarize_weights(self,W):
+    def binarize_weights(self,W,eval):
         
         binary_deterministic_training = (self.binary_training == True) and (self.stochastic_training == False)
         binary_stochastic_training = (self.binary_training == True) and (self.stochastic_training == True)
@@ -94,6 +94,14 @@ class linear_layer(object):
         binary_stochastic_test = (self.binary_test == True) and (self.stochastic_test == True)       
         binary_deterministic = ((binary_deterministic_training == True) and (eval==False)) or ((binary_deterministic_test==True) and (eval==True))
         binary_stochastic = ((binary_stochastic_training == True) and (eval==False)) or ((binary_stochastic_test==True) and (eval==True))
+        
+        # print "        binary_training = "+str(self.binary_training)
+        # print "        stochastic_training = "+str(self.stochastic_training)
+        # print "        binary_test = "+str(self.binary_test)
+        # print "        stochastic_test = "+str(self.stochastic_test)
+        # print "        eval = "+str(eval)
+        # print "        binary_deterministic = "+str(binary_deterministic)
+        # print "        binary_stochastic = "+str(binary_stochastic)
         
         # Binary weights
         # I could scale x or z instead of W 
@@ -116,7 +124,7 @@ class linear_layer(object):
             Wb = Wb/self.W0
             
             # [-1,1] -> [0,1]
-            self.Wb = (self.Wb + 1.)*.5
+            Wb = (Wb + 1.)*.5
             
             # rounding
             # [0,1] -> 0 or 1
@@ -140,7 +148,7 @@ class linear_layer(object):
         self.x = x.flatten(2)
         
         # binarize the weights
-        self.Wb = self.binarize_weights(self.W)
+        self.Wb = self.binarize_weights(self.W,eval)
         
         z = T.dot(self.x, self.Wb)
         
@@ -317,7 +325,7 @@ class ReLU_conv_layer(linear_layer):
         # x = x.reshape(self.image_shape)
         
         # binarize the weights
-        self.Wb = self.binarize_weights(self.W)
+        self.Wb = self.binarize_weights(self.W,eval)
         
         # convolution
         z = T.nnet.conv.conv2d(x, self.Wb, border_mode='valid')

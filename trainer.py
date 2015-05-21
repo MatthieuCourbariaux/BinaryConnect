@@ -49,7 +49,8 @@ class Trainer(object):
             LR, LR_decay, LR_fin,
             M, 
             BN,
-            batch_size, gpu_batches,
+            train_batch_size, number_of_train_batches_on_gpu,
+            test_batch_size, number_of_test_batches_on_gpu, 
             n_epoch, monitor_step,
             shuffle_batches, shuffle_examples):
         
@@ -72,8 +73,15 @@ class Trainer(object):
         self.BN = BN
         print "    BN = "+str(BN)        
         
-        print '    Batch size = %i' %(batch_size)
-        print '    gpu_batches = %i' %(gpu_batches)
+        self.train_batch_size = train_batch_size
+        print '    train_batch_size = %i' %(train_batch_size)
+        self.number_of_train_batches_on_gpu = number_of_train_batches_on_gpu
+        print '    number_of_train_batches_on_gpu = %i' %(number_of_train_batches_on_gpu)
+        self.test_batch_size = test_batch_size
+        print '    test_batch_size = %i' %(test_batch_size)
+        self.number_of_test_batches_on_gpu = number_of_test_batches_on_gpu
+        print '    number_of_test_batches_on_gpu = %i' %(number_of_test_batches_on_gpu)
+        
         print '    Number of epochs = %i' %(n_epoch)
         print '    Monitor step = %i' %(monitor_step)
         
@@ -103,16 +111,16 @@ class Trainer(object):
         self.M = M
         self.LR_decay = LR_decay
         self.LR_fin = LR_fin
-        self.batch_size = batch_size
-        self.gpu_batches = gpu_batches
         self.n_epoch = n_epoch
         self.step = monitor_step
         
         # put a part of the dataset on gpu
+        shared_size = np.maximum(self.train_batch_size*self.number_of_train_batches_on_gpu, 
+            self.test_batch_size*self.number_of_test_batches_on_gpu)
         self.shared_x = theano.shared(
-            np.asarray(self.train_set.X[0:self.batch_size*self.gpu_batches], dtype=theano.config.floatX))
+            np.asarray(self.train_set.X[0:shared_size], dtype=theano.config.floatX))
         self.shared_y = theano.shared(
-            np.asarray(self.train_set.y[0:self.batch_size*self.gpu_batches], dtype=theano.config.floatX))
+            np.asarray(self.train_set.y[0:shared_size], dtype=theano.config.floatX))
     
     def shuffle(self, set):
         
@@ -165,7 +173,7 @@ class Trainer(object):
         # because no DA on valid and test
         self.set_mean_var(self.train_set)
         self.set_mean_var(self.valid_set)
-                
+        
         return
     
     def window_flip(self,set):
@@ -254,24 +262,24 @@ class Trainer(object):
     def load_shared_dataset(self, set, start,size):
         
         self.shared_x.set_value(
-            set.X[self.batch_size*start:self.batch_size*(size+start)])
+            set.X[start:(size+start)])
         self.shared_y.set_value(
-            set.y[self.batch_size*start:self.batch_size*(size+start)])
+            set.y[start:(size+start)])
     
     def train_epoch(self, set):
         
         # number of batch in the dataset
-        n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
+        n_batches = np.int(np.floor(set.X.shape[0]/self.train_batch_size))
         # number of group of batches (in the memory of the GPU)
-        n_gpu_batches = np.int(np.floor(n_batches/self.gpu_batches))
+        n_number_of_batches_on_gpu = np.int(np.floor(n_batches/self.number_of_train_batches_on_gpu))
         
         # number of batches in the last group
-        if self.gpu_batches<=n_batches:
-            n_remaining_batches = n_batches%self.gpu_batches
+        if self.number_of_train_batches_on_gpu<=n_batches:
+            n_remaining_batches = n_batches%self.number_of_train_batches_on_gpu
         else:
             n_remaining_batches = n_batches
         
-        shuffled_range_i = range(n_gpu_batches)
+        shuffled_range_i = range(n_number_of_batches_on_gpu)
         
         if self.shuffle_batches==True:
             self.rng.shuffle(shuffled_range_i)
@@ -279,10 +287,10 @@ class Trainer(object):
         for i in shuffled_range_i:
         
             self.load_shared_dataset(set,
-                start=i*self.gpu_batches,
-                size=self.gpu_batches)
+                start=i*self.number_of_train_batches_on_gpu*self.train_batch_size,
+                size=self.number_of_train_batches_on_gpu*self.train_batch_size)
             
-            shuffled_range_j = range(self.gpu_batches)
+            shuffled_range_j = range(self.number_of_train_batches_on_gpu)
             
             if self.shuffle_batches==True:
                 self.rng.shuffle(shuffled_range_j)
@@ -295,7 +303,7 @@ class Trainer(object):
         if n_remaining_batches > 0:
         
             self.load_shared_dataset(set,
-                    start=n_gpu_batches*self.gpu_batches,
+                    start=n_number_of_batches_on_gpu*self.number_of_train_batches_on_gpu,
                     size=n_remaining_batches)
             
             shuffled_range_j = range(n_remaining_batches)
@@ -311,21 +319,21 @@ class Trainer(object):
     # the problem is that I only compute the true mean and var for the first layer.
     def set_mean_var(self, set):
         
-        n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
-        n_gpu_batches = np.int(np.floor(n_batches/self.gpu_batches))
+        n_batches = np.int(np.floor(set.X.shape[0]/self.train_batch_size))
+        n_number_of_batches_on_gpu = np.int(np.floor(n_batches/self.number_of_train_batches_on_gpu))
         
-        if self.gpu_batches<=n_batches:
-            n_remaining_batches = n_batches%self.gpu_batches
+        if self.number_of_train_batches_on_gpu<=n_batches:
+            n_remaining_batches = n_batches%self.number_of_train_batches_on_gpu
         else:
             n_remaining_batches = n_batches
                        
-        for i in range(n_gpu_batches):
+        for i in range(n_number_of_batches_on_gpu):
         
             self.load_shared_dataset(set,
-                start=i*self.gpu_batches,
-                size=self.gpu_batches)
+                start=i*self.number_of_train_batches_on_gpu*self.train_batch_size,
+                size=self.number_of_train_batches_on_gpu*self.train_batch_size)
             
-            for j in range(self.gpu_batches): 
+            for j in range(self.number_of_train_batches_on_gpu): 
 
                 self.BN_updates(j)
         
@@ -333,7 +341,7 @@ class Trainer(object):
         if n_remaining_batches > 0:
         
             self.load_shared_dataset(set,
-                    start=n_gpu_batches*self.gpu_batches,
+                    start=n_number_of_batches_on_gpu*self.number_of_train_batches_on_gpu,
                     size=n_remaining_batches)
             
             for j in range(n_remaining_batches): 
@@ -344,23 +352,23 @@ class Trainer(object):
     
     def test_epoch(self, set):
         
-        n_batches = np.int(np.floor(set.X.shape[0]/self.batch_size))
-        n_gpu_batches = np.int(np.floor(n_batches/self.gpu_batches))
+        n_batches = np.int(np.floor(set.X.shape[0]/self.test_batch_size))
+        n_number_of_batches_on_gpu = np.int(np.floor(n_batches/self.number_of_test_batches_on_gpu))
         
-        if self.gpu_batches<=n_batches:
-            n_remaining_batches = n_batches%self.gpu_batches
+        if self.number_of_test_batches_on_gpu<=n_batches:
+            n_remaining_batches = n_batches%self.number_of_test_batches_on_gpu
         else:
             n_remaining_batches = n_batches
         
         error_rate = 0.
         
-        for i in range(n_gpu_batches):
+        for i in range(n_number_of_batches_on_gpu):
         
             self.load_shared_dataset(set,
-                start=i*self.gpu_batches,
-                size=self.gpu_batches)
+                start=i*self.number_of_test_batches_on_gpu*self.test_batch_size,
+                size=self.number_of_test_batches_on_gpu*self.test_batch_size)
             
-            for j in range(self.gpu_batches): 
+            for j in range(self.number_of_test_batches_on_gpu): 
 
                 error_rate += self.test_batch(j)
         
@@ -368,14 +376,14 @@ class Trainer(object):
         if n_remaining_batches > 0:
         
             self.load_shared_dataset(set,
-                    start=n_gpu_batches*self.gpu_batches,
+                    start=n_number_of_batches_on_gpu*self.number_of_test_batches_on_gpu,
                     size=n_remaining_batches)
             
             for j in range(n_remaining_batches): 
 
                 error_rate += self.test_batch(j)
         
-        error_rate /= (n_batches*self.batch_size)
+        error_rate /= (n_batches*self.test_batch_size)
         error_rate *= 100.
         
         return error_rate
@@ -416,13 +424,13 @@ class Trainer(object):
         # after the build, you work with numeric variables
         
         self.train_batch = theano.function(inputs=[index,LR,M], updates=self.model.parameters_updates(x,y,LR,M),givens={ 
-                x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
-                y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
+                x: self.shared_x[index * self.train_batch_size:(index + 1) * self.train_batch_size], 
+                y: self.shared_y[index * self.train_batch_size:(index + 1) * self.train_batch_size]},
                 name = "train_batch", on_unused_input='warn')
         
         self.test_batch = theano.function(inputs = [index], outputs=self.model.errors(x,y), givens={
-                x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size], 
-                y: self.shared_y[index * self.batch_size:(index + 1) * self.batch_size]},
+                x: self.shared_x[index * self.test_batch_size:(index + 1) * self.test_batch_size], 
+                y: self.shared_y[index * self.test_batch_size:(index + 1) * self.test_batch_size]},
                 name = "test_batch", on_unused_input='warn')
         
         # batch normalization specific functions
@@ -431,7 +439,7 @@ class Trainer(object):
             # batch normalization specific functions
             # I am forced to compute mean and var incrementally because of memory explosion.
             self.BN_updates = theano.function(inputs = [index], updates=self.model.BN_updates(x), givens={
-                    x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
+                    x: self.shared_x[index * self.train_batch_size:(index + 1) * self.train_batch_size]},
                     name = "BN_updates", on_unused_input='ignore')
                     
             self.reset_mean_var = theano.function(inputs = [], updates=self.model.BN_reset(),
