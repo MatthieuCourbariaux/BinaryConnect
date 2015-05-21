@@ -46,7 +46,7 @@ class Trainer(object):
             affine_transform_b,
             horizontal_flip,
             model, save_path, load_path,
-            LR, LR_decay, LR_decay_patience,
+            LR, LR_decay, LR_fin,
             M, 
             BN,
             batch_size, number_of_batches_on_gpu,
@@ -66,7 +66,7 @@ class Trainer(object):
         
         print '    Learning rate = %f' %(LR)
         print '    Learning rate decay = %f' %(LR_decay)
-        print '    LR_decay_patience = %f' %(LR_decay_patience)
+        print '    LR_fin = %f' %(LR_fin)
         print '    Momentum = %f' %(M)
         
         self.BN = BN
@@ -105,7 +105,7 @@ class Trainer(object):
         self.LR = LR
         self.M = M
         self.LR_decay = LR_decay
-        self.LR_decay_patience = LR_decay_patience
+        self.LR_fin = LR_fin
         self.n_epoch = n_epoch
         self.step = monitor_step
         
@@ -190,8 +190,6 @@ class Trainer(object):
         if self.load_path != None:
             self.model.load_params_file(self.load_path)
         
-        # self.go_on = True
-        self.no_improvement = 0
         self.epoch = 0
         self.best_epoch = self.epoch
         
@@ -213,7 +211,6 @@ class Trainer(object):
         self.init()
         self.monitor()
         
-        # while (self.go_on):
         while (self.epoch<self.n_epoch):
             
             self.update()   
@@ -232,13 +229,18 @@ class Trainer(object):
         if self.horizontal_flip==True:
             self.DA_train_set = self.window_flip(self.DA_train_set)
         
-        self.epoch += self.step
-        
         for k in range(self.step):
         
             # train the model on all training examples
             self.train_epoch(self.DA_train_set)
             
+                    # update the LR
+            if self.LR>self.LR_fin:
+                self.LR*=self.LR_decay
+          
+        # update the epoch counter
+        self.epoch += self.step
+          
         # set the mean and variance for BN
         # not on the DA training set
         # because no DA on valid and test
@@ -253,21 +255,12 @@ class Trainer(object):
         
         # save the best parameters
         if self.validation_ER < self.best_validation_ER:
-            
+        
             self.best_validation_ER = self.validation_ER
             self.best_test_ER = self.test_ER
             self.best_epoch = self.epoch
-            self.no_improvement=0
             if self.save_path != None:
                 self.model.save_params_file(self.save_path)
-        
-        # reduce the LR if the performance does not improve for too long
-        # question = should I load the previous best ?
-        else:
-            self.no_improvement += self.step
-            if self.no_improvement >= self.LR_decay_patience:
-                self.LR *= self.LR_decay
-                self.no_improvement=0
     
     def load_shared_dataset(self, set, start,size):
         

@@ -63,7 +63,7 @@ if __name__ == "__main__":
     horizontal_flip = False
     
     # batch
-    # A multiple of 16 and a factor of 10000 if possible
+    # keep a multiple of 16 and a factor of 10000 if possible
     # e.g. 80, 400, 2000, ...
     batch_size = 80
     number_of_batches_on_gpu = train_set_size/batch_size
@@ -72,14 +72,16 @@ if __name__ == "__main__":
     shuffle_examples = True
     shuffle_batches = False
 
-    # LR schedule
-    LR = 1.
-    LR_decay = .33
-    LR_decay_patience = 2
+    # LR 
+    LR = .3
+    LR_fin = .01
+    LR_fin_epoch = 400
+    LR_decay = (LR_fin/LR)**(1./LR_fin_epoch)    
     M= 0.
-    # n_decay = 3
-    n_epoch = 1000
-    monitor_step = 1
+    
+    # Termination criteria
+    n_epoch = 500
+    monitor_step = 5
     load_path = None
     save_path = None
     
@@ -159,7 +161,7 @@ if __name__ == "__main__":
         affine_transform_a=affine_transform_a, # a is (more or less) the rotations
         affine_transform_b=affine_transform_b, # b is the translations
         horizontal_flip=horizontal_flip,
-        LR = LR, LR_decay = LR_decay,LR_decay_patience = LR_decay_patience,
+        LR = LR, LR_decay = LR_decay, LR_fin = LR_fin,
         M = M,
         BN = BN,
         batch_size = batch_size, number_of_batches_on_gpu = number_of_batches_on_gpu,

@@ -81,14 +81,6 @@ class Network(object):
         
         return updates
         
-        # y = self.fprop(x=x,eval=False) 
-        
-        # updates = self.layer[0].BN_updates()
-        # for k in range(1,self.n_hidden_layers+1):
-            # updates = updates + self.layer[k].BN_updates()
-        
-        # return updates
-        
     def BN_reset(self):
         
         updates = self.layer[0].BN_reset()

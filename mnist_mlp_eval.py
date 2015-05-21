@@ -75,10 +75,9 @@ if __name__ == "__main__":
     # LR schedule
     LR = .1
     LR_decay = .33
-    LR_decay_patience = 2
+    LR_decay_patience = 10
+    max_decay = 0
     M= 0.
-    # n_decay = 3
-    n_epoch = 0
     monitor_step = 1
     load_path = "best_mlp3.pkl" 
     save_path = None
