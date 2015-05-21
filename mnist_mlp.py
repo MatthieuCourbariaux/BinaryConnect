@@ -49,17 +49,62 @@ def onehot(x,numclasses=None):
 # MAIN
 
 if __name__ == "__main__":
-          
+    
+    print 'Hyperparameters' 
+    
+    rng = np.random.RandomState(1234)
+    train_set_size = 50000
+    # train_set_size = 128 # for testing data augmentation
+    
+    # data augmentation
+    zero_pad = 1
+    affine_transform_a = 0
+    affine_transform_b = 0
+    horizontal_flip = False
+    
+    # batch
+    # keep a multiple of 16 and a factor of 10000 if possible
+    train_batch_size = 80
+    number_of_train_batches_on_gpu = train_set_size/train_batch_size
+    # e.g. 80, 400, 2000, ...
+    test_batch_size = 400 
+    number_of_test_batches_on_gpu = 10000/test_batch_size
+    BN = True
+    BN_epsilon=1e-4 # for numerical stability
+    shuffle_examples = True
+    shuffle_batches = False
+
+    # LR 
+    LR = 1.
+    LR_decay = .99
+    M= 0.
+    
+    # Termination criteria
+    n_epoch = 1000
+    monitor_step = 4
+    load_path = None
+    save_path = None
+    
+    # architecture
+    zero_pad = 0
+    n_units = 1024
+    n_classes = 10
+    n_hidden_layer = 3
+    
+    # BinaryConnect
+    binary_training=False  
+    stochastic_training=False # whether quantization is deterministic or stochastic
+    binary_test=False
+    stochastic_test=False
+    
     print 'Loading the dataset' 
     
-    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
-    # train_set = MNIST(which_set= 'train', start=0, stop = 128, center = True) # for testing data augmentation
+    train_set = MNIST(which_set= 'train', start=0, stop = train_set_size, center = True)
     valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
     test_set = MNIST(which_set= 'test', center = True)
     
     # bc01 format
-    train_set.X = train_set.X.reshape(50000,1,28,28)
-    # train_set.X = train_set.X.reshape(128,1,28,28)
+    train_set.X = train_set.X.reshape(train_set_size,1,28,28)
     valid_set.X = valid_set.X.reshape(10000,1,28,28)
     test_set.X = test_set.X.reshape(10000,1,28,28)
     
@@ -77,49 +122,32 @@ if __name__ == "__main__":
     # print np.shape(train_set.X)
     # print np.max(train_set.X)
     # print np.min(train_set.X)
-        
-    print 'Creating the model'
     
-    rng = np.random.RandomState(1234)
-    batch_size = 64
+    print 'Creating the model'
     
     class PI_MNIST_model(Network):
 
         def __init__(self, rng):
             
-            n_units = 1024
-            n_classes = 10
-            BN = True
-            
-            binary_training=True
-            # whether quantization is deterministic or stochastic
-            stochastic_training=True
-            
-            binary_test=False
-            stochastic_test=False
-            # the number of samples for the monte carlo averaging
-            samples_test = 1
-            
-            Network.__init__(self, n_hidden_layer = 3, BN = BN, samples_test = samples_test,
-                batch_size=batch_size, n_classes=n_classes) 
+            Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN)
             
             print "    Fully connected layer 1:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 2:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 3:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
-            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes, BN = BN,
+            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes, BN = BN, BN_epsilon=BN_epsilon, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
     
@@ -127,28 +155,21 @@ if __name__ == "__main__":
     
     print 'Creating the trainer'
     
-    LR = .3
-    M= .0
-    gpu_batches = 50000/batch_size
-    n_epoch = 1000
-    monitor_step = 5
-    LR_decay = .99
-    
     trainer = Trainer(rng = rng,
         train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model, load_path = None, save_path = "best_mlp4.pkl",
-        zero_pad=0,
-        # affine_transform_a=.1, # for MNIST CNN without zero pad
-        affine_transform_a=0,
-        # affine_transform_b=.5, # for MNIST CNN without zero pad
-        affine_transform_b=0,
-        horizontal_flip=False,
+        model = model, load_path = load_path, save_path = save_path,
+        zero_pad=zero_pad,
+        affine_transform_a=affine_transform_a, # a is (more or less) the rotations
+        affine_transform_b=affine_transform_b, # b is the translations
+        horizontal_flip=horizontal_flip,
         LR = LR, LR_decay = LR_decay, LR_fin = LR/10000.,
         M = M,
-        batch_size = batch_size, gpu_batches = gpu_batches,
+        BN = BN,
+        train_batch_size = train_batch_size, number_of_train_batches_on_gpu = number_of_train_batches_on_gpu,
+        test_batch_size = test_batch_size, number_of_test_batches_on_gpu = number_of_test_batches_on_gpu, 
         n_epoch = n_epoch, monitor_step = monitor_step,
-        shuffle_batches = False, shuffle_examples = True)
-
+        shuffle_batches = shuffle_batches, shuffle_examples = shuffle_examples)
+    
     print 'Building'
     
     trainer.build()
