@@ -37,7 +37,8 @@ from format import stochastic_rounding
 
 class linear_layer(object):
     
-    def __init__(self, rng, n_inputs, n_units, BN=False, BN_epsilon=1e-4,
+    def __init__(self, rng, n_inputs, n_units,
+        BN=False, BN_epsilon=1e-4,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -253,18 +254,26 @@ class linear_layer(object):
         return updates
 
 class ReLU_layer(linear_layer):
+    
+    def __init__(self, ReLU_slope, **kwargs):
         
+        self.ReLU_slope = ReLU_slope
+        print "        ReLU_slope = "+str(ReLU_slope)
+        
+        linear_layer.__init__(self,**kwargs)
+    
     def activation(self,z):
     
         # return T.maximum(0.,z)
-        return T.maximum(z*.01,z)
+        return T.maximum(z*self.ReLU_slope,z)
         
         # Roland activation function
         # return T.ge(z,1.)*z
         
 class ReLU_conv_layer(linear_layer): 
     
-    def __init__(self, rng, image_shape, filter_shape, pool_shape, BN, BN_epsilon=1e-4,
+    def __init__(self, rng, image_shape, filter_shape, pool_shape, ReLU_slope,
+        BN, BN_epsilon=1e-4,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -276,6 +285,8 @@ class ReLU_conv_layer(linear_layer):
         print "        filter_shape = "+str(filter_shape)
         self.pool_shape = pool_shape
         print "        pool_shape = "+str(pool_shape)
+        self.ReLU_slope = ReLU_slope
+        print "        ReLU_slope = "+str(ReLU_slope)
         self.BN = BN
         print "        BN = "+str(BN)
         self.BN_epsilon = BN_epsilon
@@ -364,8 +375,8 @@ class ReLU_conv_layer(linear_layer):
         y = self.activation(z)
         
         return y
-    
-    def activation(self,z):
-    
-        return T.maximum(z*.01,z)
+        
+def activation(self,z):
+
+        return T.maximum(z*self.ReLU_slope,z)
         
