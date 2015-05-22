@@ -254,7 +254,7 @@ class Trainer(object):
         self.test_ER = self.test_epoch(self.test_set) 
         
         # save the best parameters
-        if self.validation_ER < self.best_validation_ER:
+        if self.validation_ER <= self.best_validation_ER:
         
             self.best_validation_ER = self.validation_ER
             self.best_test_ER = self.test_ER

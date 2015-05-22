@@ -39,6 +39,7 @@ class linear_layer(object):
     
     def __init__(self, rng, n_inputs, n_units,
         BN=False, BN_epsilon=1e-4,
+        dropout=1.,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
@@ -52,6 +53,8 @@ class linear_layer(object):
         print "        BN = "+str(BN)
         self.BN_epsilon = BN_epsilon
         print "        BN_epsilon = "+str(BN_epsilon)
+        self.dropout = dropout
+        print "        dropout = "+str(dropout)
         
         self.binary_training = binary_training
         print "        binary_training = "+str(binary_training)
@@ -147,6 +150,20 @@ class linear_layer(object):
         
         # shape the input as a matrix (batch_size, n_inputs)
         self.x = x.flatten(2)
+        
+        # apply dropout mask
+        if self.dropout < 1.:
+            
+            if eval == False:
+                # The cast is important because
+                # int * float32 = float64 which pulls things off the gpu
+                srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999))
+                mask = T.cast(srng.binomial(n=1, p=self.dropout, size=T.shape(self.x)), theano.config.floatX)
+                
+                # apply the mask
+                self.x = self.x * mask
+            else:
+                self.x = self.x * self.dropout     
         
         # binarize the weights
         self.Wb = self.binarize_weights(self.W,eval)

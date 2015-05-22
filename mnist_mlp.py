@@ -67,20 +67,22 @@ if __name__ == "__main__":
     # 10000 = (2*5)^4
     batch_size = 100
     number_of_batches_on_gpu = train_set_size/batch_size
-    BN = True
+    BN = False
     BN_epsilon=1e-4 # for numerical stability
+    dropout_input = 1.
+    dropout_hidden = 1.
     shuffle_examples = True
     shuffle_batches = False
 
     # LR 
-    LR = .3
-    LR_fin = .01
+    LR = .03
+    LR_fin = LR/30.
     LR_fin_epoch = 400
     LR_decay = (LR_fin/LR)**(1./LR_fin_epoch)    
-    M= 0.
+    M= .9
     
     # Termination criteria
-    n_epoch = 1000
+    n_epoch = 500
     monitor_step = 5
     load_path = None
     save_path = None
@@ -92,8 +94,8 @@ if __name__ == "__main__":
     n_hidden_layer = 3
     
     # BinaryConnect
-    binary_training=False  
-    stochastic_training=False # whether quantization is deterministic or stochastic
+    binary_training=True  
+    stochastic_training=True # whether quantization is deterministic or stochastic
     binary_test=False
     stochastic_test=False
     
@@ -133,25 +135,25 @@ if __name__ == "__main__":
             
             print "    Fully connected layer 1:"
             self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, ReLU_slope=ReLU_slope,
-                BN = BN, BN_epsilon=BN_epsilon, 
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_input,
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 2:"
             self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, ReLU_slope=ReLU_slope,
-                BN = BN, BN_epsilon=BN_epsilon, 
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 3:"
             self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,  ReLU_slope=ReLU_slope,
-                BN = BN, BN_epsilon=BN_epsilon, 
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
             self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes,
-                BN = BN, BN_epsilon=BN_epsilon, 
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
     
