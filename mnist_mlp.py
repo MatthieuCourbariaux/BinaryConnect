@@ -63,9 +63,9 @@ if __name__ == "__main__":
     horizontal_flip = False
     
     # batch
-    # keep a multiple of 16 and a factor of 10000 if possible
-    # e.g. 80, 400, 2000, ...
-    batch_size = 80
+    # keep a multiple a factor of 10000 if possible
+    # 10000 = (2*5)^4
+    batch_size = 100
     number_of_batches_on_gpu = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     M= 0.
     
     # Termination criteria
-    n_epoch = 500
+    n_epoch = 1000
     monitor_step = 5
     load_path = None
     save_path = None
