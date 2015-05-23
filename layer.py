@@ -146,7 +146,7 @@ class linear_layer(object):
             
         return Wb
     
-    def fprop(self, x, eval):
+    def fprop(self, x, can_fit, eval):
         
         # shape the input as a matrix (batch_size, n_inputs)
         self.x = x.flatten(2)
@@ -179,7 +179,7 @@ class linear_layer(object):
             self.batch_mean = T.mean(z,axis=0)
             self.batch_var = T.var(z,axis=0)
             
-            if eval == False:
+            if can_fit == True:
                 mean = self.batch_mean
                 var = self.batch_var
 
@@ -252,7 +252,7 @@ class linear_layer(object):
         
         new_mean = (self.n_samples/new_n_samples) * self.mean + (1/new_n_samples) * self.batch_mean
         # very sligthly biased variance estimation
-        new_var = (self.n_samples/new_n_samples) * self.var + (1/(new_n_samples)) * self.batch_var
+        new_var = (self.n_samples/new_n_samples) * self.var + (1/new_n_samples) * self.batch_var
         
         updates.append((self.n_samples, new_n_samples)) 
         updates.append((self.mean, new_mean))
@@ -348,7 +348,7 @@ class ReLU_conv_layer(linear_layer):
         self.update_W = theano.shared(value=np.zeros(self.filter_shape, dtype=theano.config.floatX), name='update_W')
         self.update_b = theano.shared(value=b_values, name='update_b')
 
-    def fprop(self, x, eval):
+    def fprop(self, x, can_fit, eval):
         
         # shape the input as it should be (not necessary)
         # x = x.reshape(self.image_shape)
@@ -374,7 +374,7 @@ class ReLU_conv_layer(linear_layer):
             self.batch_mean = T.mean(z,axis=(0,2,3))
             self.batch_var = T.var(z,axis=(0,2,3))
                     
-            if eval == False:
+            if can_fit == True:
                 mean = self.batch_mean
                 var = self.batch_var
 

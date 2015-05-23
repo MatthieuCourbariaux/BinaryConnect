@@ -45,10 +45,10 @@ class Network(object):
     # I should use a shared variable for the output average.
     # I should compute BN mean and var for each of the sampled set of weights
     
-    def fprop(self, x, eval):
+    def fprop(self, x, can_fit, eval):
     
         for k in range(self.n_hidden_layers+1):
-            x = self.layer[k].fprop(x, eval)
+            x = self.layer[k].fprop(x, can_fit, eval)
         
         return x
 
@@ -73,9 +73,19 @@ class Network(object):
         for k in range(self.n_hidden_layers,-1,-1):
             self.layer[k].bprop(cost)
     
-    def BN_updates(self,layer,x):
+    def BN_updates(self, can_fit, x):
+        
+        y = self.fprop(x=x, can_fit=can_fit, eval=True) 
+        
+        updates = self.layer[0].BN_updates()
+        for k in range(1,self.n_hidden_layers+1):
+            updates = updates + self.layer[k].BN_updates()
+        
+        return updates
     
-        y = self.fprop(x=x,eval=True) 
+    def BN_updates_layer(self,layer,x):
+        
+        y = self.fprop(x=x, can_fit=False,eval=True) 
         
         updates = self.layer[layer].BN_updates()
         
@@ -92,7 +102,7 @@ class Network(object):
     # you give it the input and the target and it gives you the updates
     def parameters_updates(self, x, t, LR, M):
         
-        y = self.fprop(x=x,eval=False)        
+        y = self.fprop(x=x, can_fit=True,eval=False)        
         self.bprop(y, t)
         
         # updates
@@ -104,7 +114,7 @@ class Network(object):
     
     def errors(self, x, t):
         
-        y = self.fprop(x=x,eval=True)
+        y = self.fprop(x=x, can_fit=False,eval=True)
         
         # error function
         errors = T.sum(T.neq(T.argmax(y, axis=1), T.argmax(t, axis=1)))

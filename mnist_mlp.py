@@ -67,8 +67,9 @@ if __name__ == "__main__":
     # 10000 = (2*5)^4
     batch_size = 100
     number_of_batches_on_gpu = train_set_size/batch_size
-    BN = False
+    BN = True
     BN_epsilon=1e-4 # for numerical stability
+    BN_fast_eval= True
     dropout_input = 1.
     dropout_hidden = 1.
     shuffle_examples = True
@@ -82,8 +83,8 @@ if __name__ == "__main__":
     M= .9
     
     # Termination criteria
-    n_epoch = 500
-    monitor_step = 5
+    n_epoch = 5
+    monitor_step = 1
     load_path = None
     save_path = None
     
@@ -94,8 +95,8 @@ if __name__ == "__main__":
     n_hidden_layer = 3
     
     # BinaryConnect
-    binary_training=True  
-    stochastic_training=True # whether quantization is deterministic or stochastic
+    binary_training=False  
+    stochastic_training=False # whether quantization is deterministic or stochastic
     binary_test=False
     stochastic_test=False
     
@@ -170,7 +171,7 @@ if __name__ == "__main__":
         horizontal_flip=horizontal_flip,
         LR = LR, LR_decay = LR_decay, LR_fin = LR_fin,
         M = M,
-        BN = BN,
+        BN = BN, BN_fast_eval=BN_fast_eval,
         batch_size = batch_size, number_of_batches_on_gpu = number_of_batches_on_gpu,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = shuffle_batches, shuffle_examples = shuffle_examples)
