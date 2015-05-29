@@ -76,15 +76,15 @@ if __name__ == "__main__":
     shuffle_batches = False
 
     # LR 
-    LR = .03
+    LR = .3
     LR_fin = LR/30.
-    LR_fin_epoch = 400
+    LR_fin_epoch = 100
     LR_decay = (LR_fin/LR)**(1./LR_fin_epoch)    
-    M= .9
+    M= 0.
     
     # Termination criteria
-    n_epoch = 5
-    monitor_step = 1
+    n_epoch = 1000
+    monitor_step = 2
     load_path = None
     save_path = None
     
@@ -95,8 +95,8 @@ if __name__ == "__main__":
     n_hidden_layer = 3
     
     # BinaryConnect
-    binary_training=False  
-    stochastic_training=False # whether quantization is deterministic or stochastic
+    binary_training=True  
+    stochastic_training=True # whether quantization is deterministic or stochastic
     binary_test=False
     stochastic_test=False
     

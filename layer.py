@@ -33,8 +33,6 @@ import scipy.stats
 # from theano.sandbox.cuda.basic_ops import gpu_contiguous
 # from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 
-from format import stochastic_rounding
-
 class linear_layer(object):
     
     def __init__(self, rng, n_inputs, n_units,
@@ -90,6 +88,9 @@ class linear_layer(object):
     def activation(self, z):
         return z
     
+    def hard_sigm(self,x):
+        return T.clip((x+1)/2,0,1)
+    
     def binarize_weights(self,W,eval):
         
         binary_deterministic_training = (self.binary_training == True) and (self.stochastic_training == False)
@@ -119,26 +120,23 @@ class linear_layer(object):
         
         elif binary_stochastic == True:
             
-            # clip is a kind of piecewise linear tanh
-            # BTW, if I clip W directly, I do not need to clip Wb.
-            # [?,?] -> [-W0,W0]
-            Wb = T.clip(W, -self.W0, self.W0)
+            # apply hard sigmoid to get the probability
+            # [?,?] -> [0,1]
+            p = self.hard_sigm(W/self.W0)
             
-            # [-W0,W0] -> [-1,1]
-            Wb = Wb/self.W0
+            # much slower :(
+            # srng = T.shared_randomstreams.RandomStreams(rng.randint(999999))
             
-            # [-1,1] -> [0,1]
-            Wb = (Wb + 1.)*.5
+            # much faster :)
+            # https://github.com/Theano/Theano/issues/1233#event-262671708
+            # does it work though ?? It seems so :)
+            srng = theano.sandbox.rng_mrg.MRG_RandomStreams(self.rng.randint(999999))
             
-            # rounding
-            # [0,1] -> 0 or 1
-            Wb = stochastic_rounding(Wb,self.rng)                
+            # Bernouilli distribution = binomial with n = 1
+            p_mask = T.cast(srng.binomial(n=1, p=p, size=T.shape(W)), theano.config.floatX)
             
-            # 0 or 1 -> -1 or 1
-            Wb = 2. * Wb -1.
-            
-            # -1 or 1 -> -W0 or W0
-            Wb = self.W0 * Wb
+            # [0,1] -> -W0 or W0
+            Wb = T.switch(p_mask,self.W0,-self.W0)
             
         # continuous weights
         else:
