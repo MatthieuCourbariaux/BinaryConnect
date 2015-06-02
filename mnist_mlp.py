@@ -53,8 +53,9 @@ if __name__ == "__main__":
     print 'Hyperparameters' 
     
     rng = np.random.RandomState(1234)
+    # rng = np.random.RandomState(int(sys.argv[1]))
     train_set_size = 50000
-    # train_set_size = 128 # for testing data augmentation
+    # train_set_size = 100 # for testing data augmentation
     
     # data augmentation
     zero_pad = 0
@@ -71,34 +72,52 @@ if __name__ == "__main__":
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
     dropout_input = 1.
+    # dropout_input = float(sys.argv[2])
     dropout_hidden = 1.
+    # dropout_hidden = float(sys.argv[3])
     shuffle_examples = True
     shuffle_batches = False
 
-    # LR 
-    LR = .3
-    LR_fin = LR/30.
-    LR_fin_epoch = 100
-    LR_decay = (LR_fin/LR)**(1./LR_fin_epoch)    
-    M= 0.
-    
     # Termination criteria
     n_epoch = 1000
+    # n_epoch = int(sys.argv[4])
     monitor_step = 2
     load_path = None
     save_path = None
     
+    # LR 
+    LR = .3
+    # LR = float(sys.argv[5])
+    LR_fin = .01
+    # LR_fin = float(sys.argv[6])
+    LR_decay = (LR_fin/LR)**(1./n_epoch)    
+    M= 0.
+    
     # architecture
-    ReLU_slope = .1
-    n_units = 1024
+    ReLU_slope = 0.
+    n_inputs = 784
+    n_units = 2048
     n_classes = 10
     n_hidden_layer = 3
+    # n_hidden_layer = int(sys.argv[7])
     
     # BinaryConnect
-    binary_training=True  
-    stochastic_training=True # whether quantization is deterministic or stochastic
+    BinaryConnect = True
+    # BinaryConnect = int(sys.argv[8])
+    stochastic = True
+    # stochastic = int(sys.argv[9])
+    
+    # Old hyperparameters
+    binary_training=False 
+    stochastic_training=False
     binary_test=False
     stochastic_test=False
+    if BinaryConnect == True:
+        binary_training=True      
+        if stochastic == True:   
+            stochastic_training=True  
+        else:
+            binary_test=True
     
     print 'Loading the dataset' 
     
@@ -135,22 +154,18 @@ if __name__ == "__main__":
             Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN)
             
             print "    Fully connected layer 1:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, ReLU_slope=ReLU_slope,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_inputs, n_units = n_units, ReLU_slope=ReLU_slope,
                 BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_input,
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
+            
+            for k in range(n_hidden_layer-1):
                 
-            print "    Fully connected layer 2:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, ReLU_slope=ReLU_slope,
-                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
-                binary_training=binary_training, stochastic_training=stochastic_training,
-                binary_test=binary_test, stochastic_test=stochastic_test))
-                
-            print "    Fully connected layer 3:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,  ReLU_slope=ReLU_slope,
-                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
-                binary_training=binary_training, stochastic_training=stochastic_training,
-                binary_test=binary_test, stochastic_test=stochastic_test))
+                print "    Fully connected layer "+ str(k) +":"
+                self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, ReLU_slope=ReLU_slope,
+                    BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
+                    binary_training=binary_training, stochastic_training=stochastic_training,
+                    binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
             self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes,
@@ -209,7 +224,9 @@ if __name__ == "__main__":
     
     # plt.hist(W,bins=100)
     # plt.show()
+    # plt.savefig('histogramme.png')
     
     # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
     # plt.imshow(W, cmap = cm.Greys_r)
     # plt.show()
+    # plt.savefig('features.png')

@@ -63,26 +63,33 @@ if __name__ == "__main__":
     horizontal_flip = False
     
     # batch
-    # keep a multiple of 16 and a factor of 10000 if possible
-    # e.g. 80, 400, 2000, ...
-    batch_size = 80
+    # keep a multiple a factor of 10000 if possible
+    # 10000 = (2*5)^4
+    batch_size = 100
     number_of_batches_on_gpu = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
+    BN_fast_eval= False
+    dropout_input = 1.
+    dropout_hidden = 1.
     shuffle_examples = True
     shuffle_batches = False
 
-    # LR schedule
-    LR = .1
-    LR_decay = .33
-    LR_decay_patience = 10
-    max_decay = 0
+    # LR 
+    LR = .3
+    LR_fin = LR/30.
+    LR_fin_epoch = 100
+    LR_decay = (LR_fin/LR)**(1./LR_fin_epoch)    
     M= 0.
+    
+    # Termination criteria
+    n_epoch = 0
     monitor_step = 1
     load_path = "best_mlp3.pkl" 
     save_path = None
     
     # architecture
+    ReLU_slope = .01
     n_units = 1024
     n_classes = 10
     n_hidden_layer = 3
@@ -90,7 +97,7 @@ if __name__ == "__main__":
     # BinaryConnect
     binary_training=False  
     stochastic_training=False # whether quantization is deterministic or stochastic
-    binary_test=False
+    binary_test=True
     stochastic_test=False
     
     print 'Loading the dataset' 
@@ -128,22 +135,26 @@ if __name__ == "__main__":
             Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN)
             
             print "    Fully connected layer 1:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, ReLU_slope=ReLU_slope,
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_input,
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 2:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, ReLU_slope=ReLU_slope,
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    Fully connected layer 3:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, BN = BN, BN_epsilon=BN_epsilon, 
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,  ReLU_slope=ReLU_slope,
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
-            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes, BN = BN, BN_epsilon=BN_epsilon, 
+            self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes,
+                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
     
@@ -158,9 +169,9 @@ if __name__ == "__main__":
         affine_transform_a=affine_transform_a, # a is (more or less) the rotations
         affine_transform_b=affine_transform_b, # b is the translations
         horizontal_flip=horizontal_flip,
-        LR = LR, LR_decay = LR_decay,LR_decay_patience = LR_decay_patience,
+        LR = LR, LR_decay = LR_decay, LR_fin = LR_fin,
         M = M,
-        BN = BN,
+        BN = BN, BN_fast_eval=BN_fast_eval,
         batch_size = batch_size, number_of_batches_on_gpu = number_of_batches_on_gpu,
         n_epoch = n_epoch, monitor_step = monitor_step,
         shuffle_batches = shuffle_batches, shuffle_examples = shuffle_examples)

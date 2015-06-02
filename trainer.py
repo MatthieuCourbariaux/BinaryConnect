@@ -358,13 +358,11 @@ class Trainer(object):
                         
         else:
             
-            self.load_shared_dataset(set,
-                        start=0,
-                        size=self.number_of_batches_on_gpu*self.batch_size)
+            # first batch -> use the mean and var of the first batch
+            self.load_shared_dataset(set,start=0,size=self.batch_size)
+            self.BN_updates_1()
             
-            for k in range(self.model.n_hidden_layers+1):
-                self.BN_updates_1(k)
-            
+            # afterwards, use the cumulative mean and var
             for i in range(n_number_of_batches_on_gpu):
                 
                 self.load_shared_dataset(set,
@@ -469,8 +467,8 @@ class Trainer(object):
                             x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
                             name = "BN_updates", on_unused_input='ignore'))                            
             else:
-                self.BN_updates_1 = theano.function(inputs = [index], updates=self.model.BN_updates(True,x), givens={
-                            x: self.shared_x[index * self.batch_size:(index + 1) * self.batch_size]},
+                self.BN_updates_1 = theano.function(inputs = [], updates=self.model.BN_updates(True,x), givens={
+                            x: self.shared_x[0:self.batch_size]},
                             name = "BN_updates_1", on_unused_input='ignore')
                             
                 self.BN_updates_2 = theano.function(inputs = [index], updates=self.model.BN_updates(False,x), givens={
