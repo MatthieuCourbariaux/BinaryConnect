@@ -116,7 +116,7 @@ class linear_layer(object):
                 
             # in the round to nearest case, we use binary weights during eval and training
             # [?,?] -> -W0 or W0
-            Wb = self.W0 * T.sgn(W)            
+            Wb = T.switch(T.ge(W,0),self.W0,-self.W0)           
         
         elif binary_stochastic == True:
             
@@ -138,6 +138,8 @@ class linear_layer(object):
             # [0,1] -> -W0 or W0
             Wb = T.switch(p_mask,self.W0,-self.W0)
             
+            # print "OK"
+            
         # continuous weights
         else:
             Wb = W
@@ -155,7 +157,11 @@ class linear_layer(object):
             if eval == False:
                 # The cast is important because
                 # int * float32 = float64 which pulls things off the gpu
-                srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999))
+                
+                # very slow ??
+                # srng = T.shared_randomstreams.RandomStreams(self.rng.randint(999999)) 
+                
+                srng = theano.sandbox.rng_mrg.MRG_RandomStreams(self.rng.randint(999999))
                 mask = T.cast(srng.binomial(n=1, p=self.dropout, size=T.shape(self.x)), theano.config.floatX)
                 
                 # apply the mask
@@ -353,6 +359,7 @@ class ReLU_conv_layer(linear_layer):
         
         # binarize the weights
         self.Wb = self.binarize_weights(self.W,eval)
+        # self.Wb = self.W
         
         # convolution
         z = T.nnet.conv.conv2d(x, self.Wb, border_mode='valid')

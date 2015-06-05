@@ -65,11 +65,11 @@ if __name__ == "__main__":
     # batch
     # keep a multiple a factor of 10000 if possible
     # 10000 = (2*5)^4
-    batch_size = 100
+    batch_size = 1000
     number_of_batches_on_gpu = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
-    BN_fast_eval= False
+    BN_fast_eval= True
     dropout_input = 1.
     dropout_hidden = 1.
     shuffle_examples = True
@@ -85,20 +85,32 @@ if __name__ == "__main__":
     # Termination criteria
     n_epoch = 0
     monitor_step = 1
-    load_path = "best_mlp3.pkl" 
+    load_path = "mlp_exp/['mnist_mlp.py', '1234', '1.0', '1.0', '1000', '0.3', '0.003', '3', '0', '0'].pkl" 
     save_path = None
     
     # architecture
-    ReLU_slope = .01
+    ReLU_slope = .0
     n_units = 1024
     n_classes = 10
     n_hidden_layer = 3
     
     # BinaryConnect
-    binary_training=False  
-    stochastic_training=False # whether quantization is deterministic or stochastic
-    binary_test=True
+    BinaryConnect = True
+    # BinaryConnect = int(sys.argv[8])
+    stochastic = True
+    # stochastic = int(sys.argv[9])
+    
+    # Old hyperparameters
+    binary_training=True 
+    stochastic_training=True
+    binary_test=False
     stochastic_test=False
+    if BinaryConnect == True:
+        binary_training=True      
+        if stochastic == True:   
+            stochastic_training=True  
+        else:
+            binary_test=True
     
     print 'Loading the dataset' 
     
@@ -193,23 +205,31 @@ if __name__ == "__main__":
     # import pickle
     # pickle.dump( W, open( "W.pkl", "wb" ) )
     
-    # print 'Display weights'
+    print 'Display weights'
     
-    # import matplotlib.pyplot as plt
-    # import matplotlib.cm as cm
-    # from filter_plot import tile_raster_images
+    import matplotlib.pyplot as plt
+    import matplotlib.cm as cm
+    from filter_plot import tile_raster_images
     
-    # W = np.transpose(model.layer[0].W.get_value())
+    W = np.transpose(model.layer[0].W.get_value())
     
-    # print "min(W) = " + str(np.min(W))
-    # print "max(W) = " + str(np.max(W))
-    # print "mean(W) = " + str(np.mean(W))
-    # print "mean(abs(W)) = " + str(np.mean(abs(W)))
-    # print "var(W) = " + str(np.var(W))
+    print "min(W) = " + str(np.min(W))
+    print "max(W) = " + str(np.max(W))
+    print "mean(W) = " + str(np.mean(W))
+    print "mean(abs(W)) = " + str(np.mean(abs(W)))
+    print "var(W) = " + str(np.var(W))
+    
+    histogram = np.histogram(W,bins=1000)
+    # print histogram[0]
+    # print histogram[1]
+    np.savetxt("No_reg_histogram0.csv", histogram[0], delimiter=",")
+    np.savetxt("No_reg_histogram1.csv", histogram[1], delimiter=",")
     
     # plt.hist(W,bins=100)
     # plt.show()
+    # plt.savefig('histogramme.png')
     
-    # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
-    # plt.imshow(W, cmap = cm.Greys_r)
+    W = tile_raster_images(W,(28,28),(4,4),(2, 2))
+    plt.imshow(W, cmap = cm.Greys_r)
     # plt.show()
+    plt.savefig('No_reg_features.png')

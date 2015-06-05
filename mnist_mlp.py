@@ -52,8 +52,8 @@ if __name__ == "__main__":
     
     print 'Hyperparameters' 
     
-    rng = np.random.RandomState(1234)
-    # rng = np.random.RandomState(int(sys.argv[1]))
+    # rng = np.random.RandomState(1234)
+    rng = np.random.RandomState(int(sys.argv[1]))
     train_set_size = 50000
     # train_set_size = 100 # for testing data augmentation
     
@@ -66,46 +66,51 @@ if __name__ == "__main__":
     # batch
     # keep a multiple a factor of 10000 if possible
     # 10000 = (2*5)^4
-    batch_size = 100
+    batch_size = 200
     number_of_batches_on_gpu = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
-    dropout_input = 1.
-    # dropout_input = float(sys.argv[2])
-    dropout_hidden = 1.
-    # dropout_hidden = float(sys.argv[3])
+    # dropout_input = 1.
+    dropout_input = float(sys.argv[2])
+    # dropout_hidden = 1.
+    dropout_hidden = float(sys.argv[3])
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 1000
+    n_epoch = 0
     # n_epoch = int(sys.argv[4])
     monitor_step = 2
-    load_path = None
+    core_path = "mlp_exp/BN 200/Visu1/" + str(sys.argv)
+    # load_path = None    
+    load_path = core_path + ".pkl"
     save_path = None
+    # save_path = core_path + ".pkl"
+    # print save_path
     
     # LR 
-    LR = .3
-    # LR = float(sys.argv[5])
-    LR_fin = .01
-    # LR_fin = float(sys.argv[6])
-    LR_decay = (LR_fin/LR)**(1./n_epoch)    
+    # LR = .3
+    LR = float(sys.argv[5])
+    # LR_fin = .01
+    LR_fin = float(sys.argv[6])
+    LR_decay = 1. 
+    # LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
     
     # architecture
     ReLU_slope = 0.
     n_inputs = 784
-    n_units = 2048
+    n_units = 1024
     n_classes = 10
-    n_hidden_layer = 3
-    # n_hidden_layer = int(sys.argv[7])
+    # n_hidden_layer = 3
+    n_hidden_layer = int(sys.argv[7])
     
     # BinaryConnect
-    BinaryConnect = True
-    # BinaryConnect = int(sys.argv[8])
-    stochastic = True
-    # stochastic = int(sys.argv[9])
+    # BinaryConnect = True
+    BinaryConnect = int(sys.argv[8])
+    # stochastic = True
+    stochastic = int(sys.argv[9])
     
     # Old hyperparameters
     binary_training=False 
@@ -202,19 +207,13 @@ if __name__ == "__main__":
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
     
-    # print 'Save first hidden layer weights'
+    print 'Display weights'
     
-    # W = model.layer[1].W.get_value()
-    # import pickle
-    # pickle.dump( W, open( "W.pkl", "wb" ) )
+    import matplotlib.pyplot as plt
+    import matplotlib.cm as cm
+    from filter_plot import tile_raster_images
     
-    # print 'Display weights'
-    
-    # import matplotlib.pyplot as plt
-    # import matplotlib.cm as cm
-    # from filter_plot import tile_raster_images
-    
-    # W = np.transpose(model.layer[0].W.get_value())
+    W = np.transpose(model.layer[0].W.get_value())
     
     # print "min(W) = " + str(np.min(W))
     # print "max(W) = " + str(np.max(W))
@@ -222,11 +221,17 @@ if __name__ == "__main__":
     # print "mean(abs(W)) = " + str(np.mean(abs(W)))
     # print "var(W) = " + str(np.var(W))
     
+    histogram = np.histogram(W,bins=1000,range=(-.2,.2))
+    # print histogram[0]
+    # print histogram[1]
+    np.savetxt(core_path + "_hist0.csv", histogram[0], delimiter=",")
+    np.savetxt(core_path + "_hist1.csv", histogram[1], delimiter=",")
+    
     # plt.hist(W,bins=100)
     # plt.show()
     # plt.savefig('histogramme.png')
     
-    # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
-    # plt.imshow(W, cmap = cm.Greys_r)
+    W = tile_raster_images(W,(28,28),(4,4),(2, 2))
+    plt.imshow(W, cmap = cm.Greys_r)
     # plt.show()
-    # plt.savefig('features.png')
+    plt.savefig(core_path + '_features.png')
