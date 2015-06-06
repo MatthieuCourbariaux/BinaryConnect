@@ -78,14 +78,14 @@ if __name__ == "__main__":
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 0
-    # n_epoch = int(sys.argv[3])
+    # n_epoch = 0
+    n_epoch = int(sys.argv[3])
     monitor_step = 2 
     core_path = "cnn_exp/" + str(sys.argv)
-    # load_path = None    
-    load_path = core_path + ".pkl"
-    save_path = None
-    # save_path = core_path + ".pkl"
+    load_path = None    
+    # load_path = core_path + ".pkl"
+    # save_path = None
+    save_path = core_path + ".pkl"
     # print save_path
     
     # LR 
@@ -93,8 +93,8 @@ if __name__ == "__main__":
     LR = float(sys.argv[4])
     # LR_fin = .03
     LR_fin = float(sys.argv[5])
-    LR_decay = 1. 
-    # LR_decay = (LR_fin/LR)**(1./n_epoch)    
+    # LR_decay = 1. 
+    LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
     
     # architecture
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     # for hinge loss
     train_set.y = 2* train_set.y - 1.
     valid_set.y = 2* valid_set.y - 1.
-    test_set.y = 2* test_set.y - 1.    
+    test_set.y = 2* test_set.y - 1.
     
     # print train_set.X
     # print np.shape(train_set.X)

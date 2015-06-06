@@ -79,14 +79,14 @@ if __name__ == "__main__":
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 0
-    # n_epoch = int(sys.argv[4])
+    # n_epoch = 0
+    n_epoch = int(sys.argv[4])
     monitor_step = 2
-    core_path = "mlp_exp/BN 200/Visu1/" + str(sys.argv)
-    # load_path = None    
-    load_path = core_path + ".pkl"
-    save_path = None
-    # save_path = core_path + ".pkl"
+    core_path = "mlp_exp/" + str(sys.argv)
+    load_path = None    
+    # load_path = core_path + ".pkl"
+    # save_path = None
+    save_path = core_path + ".pkl"
     # print save_path
     
     # LR 
@@ -94,8 +94,8 @@ if __name__ == "__main__":
     LR = float(sys.argv[5])
     # LR_fin = .01
     LR_fin = float(sys.argv[6])
-    LR_decay = 1. 
-    # LR_decay = (LR_fin/LR)**(1./n_epoch)    
+    # LR_decay = 1. 
+    LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
     
     # architecture
@@ -209,27 +209,15 @@ if __name__ == "__main__":
     
     print 'Display weights'
     
-    import matplotlib.pyplot as plt
-    import matplotlib.cm as cm
-    from filter_plot import tile_raster_images
+    # import matplotlib.pyplot as plt
+    # import matplotlib.cm as cm
+    # from filter_plot import tile_raster_images
     
     W = np.transpose(model.layer[0].W.get_value())
     
-    # print "min(W) = " + str(np.min(W))
-    # print "max(W) = " + str(np.max(W))
-    # print "mean(W) = " + str(np.mean(W))
-    # print "mean(abs(W)) = " + str(np.mean(abs(W)))
-    # print "var(W) = " + str(np.var(W))
-    
-    histogram = np.histogram(W,bins=1000,range=(-.2,.2))
-    # print histogram[0]
-    # print histogram[1]
-    np.savetxt(core_path + "_hist0.csv", histogram[0], delimiter=",")
-    np.savetxt(core_path + "_hist1.csv", histogram[1], delimiter=",")
-    
-    # plt.hist(W,bins=100)
-    # plt.show()
-    # plt.savefig('histogramme.png')
+    # histogram = np.histogram(W,bins=1000,range=(-.2,.2))
+    # np.savetxt(core_path + "_hist0.csv", histogram[0], delimiter=",")
+    # np.savetxt(core_path + "_hist1.csv", histogram[1], delimiter=",")
     
     W = tile_raster_images(W,(28,28),(4,4),(2, 2))
     plt.imshow(W, cmap = cm.Greys_r)
