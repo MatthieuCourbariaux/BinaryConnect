@@ -66,23 +66,23 @@ if __name__ == "__main__":
     # batch
     # keep a multiple a factor of 10000 if possible
     # 10000 = (2*5)^4
-    batch_size = 200
+    batch_size = 100
     number_of_batches_on_gpu = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
-    dropout_input = 1.
+    dropout_input = .9
     # dropout_input = float(sys.argv[2])
-    dropout_hidden = 1.
+    dropout_hidden = .75
     # dropout_hidden = float(sys.argv[3])
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 12
+    n_epoch = 100
     # n_epoch = int(sys.argv[4])
     monitor_step = 2
-    core_path = "cnn_exp/" + str(sys.argv)
+    # core_path = "cnn_exp/" + str(sys.argv)
     load_path = None    
     # load_path = core_path + ".pkl"
     save_path = None
@@ -108,9 +108,9 @@ if __name__ == "__main__":
     n_hidden_layer = (length+1)*2
     
     # BinaryConnect
-    BinaryConnect = True
+    BinaryConnect = False
     # BinaryConnect = int(sys.argv[8])
-    stochastic = True
+    stochastic = False
     # stochastic = int(sys.argv[9])
     
     # Old hyperparameters

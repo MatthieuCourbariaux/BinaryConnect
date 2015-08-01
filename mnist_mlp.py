@@ -52,8 +52,8 @@ if __name__ == "__main__":
     
     print 'Hyperparameters' 
     
-    # rng = np.random.RandomState(1234)
-    rng = np.random.RandomState(int(sys.argv[1]))
+    rng = np.random.RandomState(1234)
+    # rng = np.random.RandomState(int(sys.argv[1]))
     train_set_size = 50000
     # train_set_size = 100 # for testing data augmentation
     
@@ -71,29 +71,29 @@ if __name__ == "__main__":
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
-    # dropout_input = 1.
-    dropout_input = float(sys.argv[2])
-    # dropout_hidden = 1.
-    dropout_hidden = float(sys.argv[3])
+    dropout_input = 1.
+    # dropout_input = float(sys.argv[2])
+    dropout_hidden = 1.
+    # dropout_hidden = float(sys.argv[3])
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    # n_epoch = 0
-    n_epoch = int(sys.argv[4])
+    n_epoch = 1000
+    # n_epoch = int(sys.argv[4])
     monitor_step = 2
-    core_path = "mlp_exp/" + str(sys.argv)
+    # core_path = "mlp_exp/" + str(sys.argv)
     load_path = None    
     # load_path = core_path + ".pkl"
-    # save_path = None
-    save_path = core_path + ".pkl"
+    save_path = None
+    # save_path = core_path + ".pkl"
     # print save_path
     
     # LR 
-    # LR = .3
-    LR = float(sys.argv[5])
-    # LR_fin = .01
-    LR_fin = float(sys.argv[6])
+    LR = .3
+    # LR = float(sys.argv[5])
+    LR_fin = .01
+    # LR_fin = float(sys.argv[6])
     # LR_decay = 1. 
     LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
@@ -103,14 +103,14 @@ if __name__ == "__main__":
     n_inputs = 784
     n_units = 1024
     n_classes = 10
-    # n_hidden_layer = 3
-    n_hidden_layer = int(sys.argv[7])
+    n_hidden_layer = 3
+    # n_hidden_layer = int(sys.argv[7])
     
     # BinaryConnect
-    # BinaryConnect = True
-    BinaryConnect = int(sys.argv[8])
-    # stochastic = True
-    stochastic = int(sys.argv[9])
+    BinaryConnect = True
+    # BinaryConnect = int(sys.argv[8])
+    stochastic = True
+    # stochastic = int(sys.argv[9])
     
     # Old hyperparameters
     binary_training=False 

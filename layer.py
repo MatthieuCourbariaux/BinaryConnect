@@ -276,38 +276,69 @@ class linear_layer(object):
 
 class ReLU_layer(linear_layer):
     
-    def __init__(self, ReLU_slope, **kwargs):
+    # def __init__(self, ReLU_slope, **kwargs):
         
-        self.ReLU_slope = ReLU_slope
-        print "        ReLU_slope = "+str(ReLU_slope)
+        # self.ReLU_slope = ReLU_slope
+        # print "        ReLU_slope = "+str(ReLU_slope)
         
-        linear_layer.__init__(self,**kwargs)
+        # linear_layer.__init__(self,**kwargs)
     
     def activation(self,z):
     
-        # return T.maximum(0.,z)
-        return T.maximum(z*self.ReLU_slope,z)
-        
-        # Roland activation function
-        # return T.ge(z,1.)*z
-        
-class ReLU_conv_layer(linear_layer): 
+        return T.maximum(0.,z)
+        # return T.maximum(z*self.ReLU_slope,z)
+
+class Maxout_layer(linear_layer):
     
-    def __init__(self, rng, image_shape, filter_shape, pool_shape, ReLU_slope,
+    def __init__(self, rng, n_inputs, n_units, n_pieces,
+        BN=False, BN_epsilon=1e-4,
+        dropout=1.,
+        binary_training=False, stochastic_training=False,
+        binary_test=False, stochastic_test=0):
+        
+        linear_layer.__init__(self, rng=rng, n_inputs=n_inputs, 
+            n_units = n_units*n_pieces,
+            BN=BN, BN_epsilon=BN_epsilon,
+            dropout=dropout,
+            binary_training=binary_training, stochastic_training=stochastic_training,
+            binary_test=binary_test, stochastic_test=stochastic_test)
+            
+        self.n_pieces = n_pieces
+    
+    def activation(self,z):
+        
+        y = T.reshape(z,(T.shape(z)[0], self.n_units//self.n_pieces, self.n_pieces))
+
+        y = T.max(y,axis=2)
+        
+        y = T.reshape(y,(T.shape(z)[0],self.n_units//self.n_pieces))
+
+        return y
+    
+    # def activation(self,conv_out):
+        
+        # conv_out = T.reshape(conv_out,(T.shape(conv_out)[0], T.shape(conv_out)[1]//self.n_pieces, self.n_pieces,T.shape(conv_out)[2],T.shape(conv_out)[3]))
+        # return T.max( conv_out,axis=2)
+        
+class conv_layer(linear_layer): 
+    
+    def __init__(self, rng, 
+        # image_shape, 
+        filter_shape, pool_shape, pool_stride,
         BN, BN_epsilon=1e-4,
         binary_training=False, stochastic_training=False,
         binary_test=False, stochastic_test=0):
         
         self.rng = rng
         
-        self.image_shape = image_shape
-        print "        image_shape = "+str(image_shape)
+        # self.image_shape = image_shape
+        # print "        image_shape = "+str(image_shape)
         self.filter_shape = filter_shape
         print "        filter_shape = "+str(filter_shape)
         self.pool_shape = pool_shape
-        print "        pool_shape = "+str(pool_shape)
-        self.ReLU_slope = ReLU_slope
-        print "        ReLU_slope = "+str(ReLU_slope)
+        print "        pool_shape = "+str(pool_shape)        
+        self.pool_stride = pool_stride
+        print "        pool_stride = "+str(pool_stride)
         self.BN = BN
         print "        BN = "+str(BN)
         self.BN_epsilon = BN_epsilon
@@ -366,7 +397,7 @@ class ReLU_conv_layer(linear_layer):
 
         # Maxpooling
         if self.pool_shape != (1,1):
-            z = T.signal.downsample.max_pool_2d(input=z, ds=self.pool_shape)
+            z = T.signal.downsample.max_pool_2d(input=z, ds=self.pool_shape, st=self.pool_stride)
         
         # for BN
         self.z = z
@@ -398,7 +429,12 @@ class ReLU_conv_layer(linear_layer):
         
         return y
         
-def activation(self,z):
+    def activation(self,z):
+        return z
 
-        return T.maximum(z*self.ReLU_slope,z)
+class ReLU_conv_layer(conv_layer):
+    
+    def activation(self,z):
+    
+        return T.maximum(0.,z)
         
