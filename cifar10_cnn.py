@@ -66,33 +66,33 @@ if __name__ == "__main__":
     # batch
     # keep a multiple a factor of 10000 if possible
     # 10000 = (2*5)^4
-    # batch_size = 200
-    batch_size = int(sys.argv[1])
+    batch_size = 100
+    # batch_size = int(sys.argv[1])
     number_of_batches_on_gpu = 40000/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
-    # dropout_hidden = 1.
-    dropout_hidden = float(sys.argv[2])
+    dropout_hidden = .7
+    # dropout_hidden = float(sys.argv[2])
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    # n_epoch = 0
-    n_epoch = int(sys.argv[3])
+    n_epoch = 200
+    # n_epoch = int(sys.argv[3])
     monitor_step = 2 
-    core_path = "cnn_exp/" + str(sys.argv)
+    # core_path = "cnn_exp/" + str(sys.argv)
     load_path = None    
     # load_path = core_path + ".pkl"
-    # save_path = None
-    save_path = core_path + ".pkl"
+    save_path = None
+    # save_path = core_path + ".pkl"
     # print save_path
     
     # LR 
-    # LR = .03
-    LR = float(sys.argv[4])
-    # LR_fin = .03
-    LR_fin = float(sys.argv[5])
+    LR = .3
+    # LR = float(sys.argv[4])
+    LR_fin = .003
+    # LR_fin = float(sys.argv[5])
     # LR_decay = 1. 
     LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
@@ -101,17 +101,17 @@ if __name__ == "__main__":
     # greatly inspired from http://arxiv.org/pdf/1412.6071v4.pdf
     ReLU_slope = 0.
     channel_size = 32
-    # n_channels = 16# number of channels of the first layer
-    n_channels = int(sys.argv[6])
+    n_channels = 32# number of channels of the first layer
+    # n_channels = int(sys.argv[6])
     n_classes = 10
     length = 3 # number of C2-C2-MP2
     n_hidden_layer = (length+1)*2
     
     # BinaryConnect
-    # BinaryConnect = True
-    BinaryConnect = int(sys.argv[7])
-    # stochastic = True
-    stochastic = int(sys.argv[8])
+    BinaryConnect = True
+    # BinaryConnect = int(sys.argv[7])
+    stochastic = True
+    # stochastic = int(sys.argv[8])
     
     # Old hyperparameters
     binary_training=False 
@@ -282,20 +282,6 @@ if __name__ == "__main__":
                     binary_test=binary_test, 
                     stochastic_test=stochastic_test
             ))
-            
-            # self.layer.append(ReLU_conv_layer(
-                # rng,
-                # image_shape=(batch_size, n_channels*(length+1), local_channel_size, local_channel_size),
-                # filter_shape=(n_channels*(length+2), n_channels*(length+1), 1, 1),
-                # pool_shape=(1,1),
-                # ReLU_slope = ReLU_slope,
-                # BN = BN,
-                # BN_epsilon=BN_epsilon,
-                # binary_training=binary_training, 
-                # stochastic_training=stochastic_training,
-                # binary_test=binary_test, 
-                # stochastic_test=stochastic_test
-            # ))
             
             print "    L2 SVM layer:"
             

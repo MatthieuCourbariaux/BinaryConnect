@@ -300,6 +300,7 @@ class ReLU_conv_layer(linear_layer):
         
         self.rng = rng
         
+        # image shape is so far useless
         self.image_shape = image_shape
         print "        image_shape = "+str(image_shape)
         self.filter_shape = filter_shape
@@ -398,7 +399,6 @@ class ReLU_conv_layer(linear_layer):
         
         return y
         
-def activation(self,z):
-
+    def activation(self,z):
         return T.maximum(z*self.ReLU_slope,z)
         
