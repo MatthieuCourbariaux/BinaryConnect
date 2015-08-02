@@ -69,17 +69,17 @@ if __name__ == "__main__":
     batch_size = 100
     # batch_size = int(sys.argv[1])
     number_of_batches_on_gpu = 40000/batch_size
-    BN = False
+    BN = True
     BN_epsilon=1e-4 # for numerical stability
-    BN_fast_eval= False
+    BN_fast_eval= True
     # dropout_input = .8
-    dropout_hidden = .5
+    dropout_hidden = .7
     # dropout_hidden = float(sys.argv[2])
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 100
+    n_epoch = 100 # 80, 50
     # n_epoch = int(sys.argv[3])
     monitor_step = 2 
     # core_path = "cnn_exp/" + str(sys.argv)
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # print save_path
     
     # LR 
-    LR = .01
+    LR = .3
     # LR = float(sys.argv[4])
     LR_fin = .01
     # LR_fin = float(sys.argv[5])
@@ -164,7 +164,7 @@ if __name__ == "__main__":
                 
             self.layer.append(ReLU_conv_layer(
                 rng,
-                filter_shape=(64, 3, 4, 4),
+                filter_shape=(128, 3, 4, 4),
                 pool_shape=(3,3),
                 pool_stride=(2,2),
                 BN = BN,                     
@@ -179,7 +179,7 @@ if __name__ == "__main__":
                 
             self.layer.append(ReLU_conv_layer(
                 rng,
-                filter_shape=(128, 64, 4, 4),
+                filter_shape=(256, 128, 4, 4),
                 pool_shape=(3,3),
                 pool_stride=(2,2),
                 BN = BN,                     
@@ -194,7 +194,7 @@ if __name__ == "__main__":
                 
             self.layer.append(ReLU_conv_layer(
                 rng,
-                filter_shape=(128, 128, 4, 4),
+                filter_shape=(256, 256, 4, 4),
                 pool_shape=(1,1),
                 pool_stride=(1,1),
                 BN = BN,                     
@@ -207,24 +207,11 @@ if __name__ == "__main__":
             
             print "    FC layer:"
             
-            self.layer.append(Maxout_layer(
-                    rng = rng, 
-                    n_inputs = 128*3*3, 
-                    n_units = 512, 
-                    n_pieces = 4, 
-                    BN = BN, 
-                    BN_epsilon=BN_epsilon, 
-                    dropout=dropout_hidden, 
-                    binary_training=binary_training, 
-                    stochastic_training=stochastic_training,
-                    binary_test=binary_test, 
-                    stochastic_test=stochastic_test
-            ))
-            
-            # self.layer.append(ReLU_layer(
+            # self.layer.append(Maxout_layer(
                     # rng = rng, 
                     # n_inputs = 128*3*3, 
-                    # n_units = 1024, 
+                    # n_units = 512, 
+                    # n_pieces = 4, 
                     # BN = BN, 
                     # BN_epsilon=BN_epsilon, 
                     # dropout=dropout_hidden, 
@@ -234,11 +221,24 @@ if __name__ == "__main__":
                     # stochastic_test=stochastic_test
             # ))
             
+            self.layer.append(ReLU_layer(
+                    rng = rng, 
+                    n_inputs = 256*3*3, 
+                    n_units = 2048, 
+                    BN = BN, 
+                    BN_epsilon=BN_epsilon, 
+                    dropout=dropout_hidden, 
+                    binary_training=binary_training, 
+                    stochastic_training=stochastic_training,
+                    binary_test=binary_test, 
+                    stochastic_test=stochastic_test
+            ))
+            
             print "    L2 SVM layer:"
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= 512, 
+                n_inputs= 2048, 
                 n_units = 10, 
                 BN = BN,
                 BN_epsilon=BN_epsilon,

@@ -276,17 +276,9 @@ class linear_layer(object):
 
 class ReLU_layer(linear_layer):
     
-    # def __init__(self, ReLU_slope, **kwargs):
-        
-        # self.ReLU_slope = ReLU_slope
-        # print "        ReLU_slope = "+str(ReLU_slope)
-        
-        # linear_layer.__init__(self,**kwargs)
-    
     def activation(self,z):
     
         return T.maximum(0.,z)
-        # return T.maximum(z*self.ReLU_slope,z)
 
 class Maxout_layer(linear_layer):
     
@@ -314,11 +306,6 @@ class Maxout_layer(linear_layer):
         y = T.reshape(y,(T.shape(z)[0],self.n_units//self.n_pieces))
 
         return y
-    
-    # def activation(self,conv_out):
-        
-        # conv_out = T.reshape(conv_out,(T.shape(conv_out)[0], T.shape(conv_out)[1]//self.n_pieces, self.n_pieces,T.shape(conv_out)[2],T.shape(conv_out)[3]))
-        # return T.max( conv_out,axis=2)
         
 class conv_layer(linear_layer): 
     
@@ -428,13 +415,14 @@ class conv_layer(linear_layer):
         y = self.activation(z)
         
         return y
-        
-    def activation(self,z):
-        return z
 
 class ReLU_conv_layer(conv_layer):
     
     def activation(self,z):
     
         return T.maximum(0.,z)
+# Maxout conv layer   
+    # def activation(self,conv_out):
         
+        # conv_out = T.reshape(conv_out,(T.shape(conv_out)[0], T.shape(conv_out)[1]//self.n_pieces, self.n_pieces,T.shape(conv_out)[2],T.shape(conv_out)[3]))
+        # return T.max( conv_out,axis=2)
