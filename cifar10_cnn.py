@@ -59,7 +59,7 @@ if __name__ == "__main__":
     # rng = np.random.RandomState(int(sys.argv[1]))
     
     # data augmentation
-    zero_pad = 2
+    zero_pad = 0
     affine_transform_a = 0
     affine_transform_b = 0
     horizontal_flip = False
@@ -74,14 +74,14 @@ if __name__ == "__main__":
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
     # dropout_input = .8
-    # dropout_hidden = 1.
-    dropout_hidden = .7
+    dropout_hidden = 1.
+    # dropout_hidden = .7
     # dropout_hidden = float(sys.argv[2])
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 100
+    n_epoch = 200
     # n_epoch = int(sys.argv[3])
     monitor_step = 2 
     # core_path = "cnn_exp/" + str(sys.argv)
@@ -94,16 +94,16 @@ if __name__ == "__main__":
     # LR 
     LR = .3
     # LR = float(sys.argv[4])
-    LR_fin = .01
+    LR_fin = .001
     # LR_fin = float(sys.argv[5])
     # LR_decay = 1. 
     LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
     
     # BinaryConnect
-    BinaryConnect = False
+    BinaryConnect = True
     # BinaryConnect = int(sys.argv[7])
-    stochastic = False
+    stochastic = True
     # stochastic = int(sys.argv[8])
     
     # Old hyperparameters
@@ -160,14 +160,29 @@ if __name__ == "__main__":
 
         def __init__(self, rng):
 
-            Network.__init__(self, n_hidden_layer = 4, BN = BN)
+            Network.__init__(self, n_hidden_layer = 8, BN = BN)
             
-            print "    C4 P3S2 layer:"
+            print "    C3 layer:"
                 
             self.layer.append(ReLU_conv_layer(
                 rng,
-                filter_shape=(128, 3, 4, 4),
-                pool_shape=(3,3),
+                filter_shape=(128, 3, 3, 3),
+                pool_shape=(1,1),
+                pool_stride=(1,1),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C3 P2 layers:"
+                
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(128, 128, 3, 3),
+                pool_shape=(2,2),
                 pool_stride=(2,2),
                 BN = BN,                     
                 BN_epsilon=BN_epsilon,
@@ -177,12 +192,27 @@ if __name__ == "__main__":
                 stochastic_test=stochastic_test
             ))
             
-            print "    C4 P3S2 layer:"
+            print "    C2 layer:"
                 
             self.layer.append(ReLU_conv_layer(
                 rng,
-                filter_shape=(256, 128, 4, 4),
-                pool_shape=(3,3),
+                filter_shape=(256, 128, 2, 2),
+                pool_shape=(1,1),
+                pool_stride=(1,1),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 P2 layers:"
+            
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(256, 256, 2, 2),
+                pool_shape=(2,2),
                 pool_stride=(2,2),
                 BN = BN,                     
                 BN_epsilon=BN_epsilon,
@@ -192,11 +222,41 @@ if __name__ == "__main__":
                 stochastic_test=stochastic_test
             ))
             
-            print "    C4 layer:"
+            print "    C2 layer:"
                 
             self.layer.append(ReLU_conv_layer(
                 rng,
-                filter_shape=(256, 256, 4, 4),
+                filter_shape=(512, 256, 2, 2),
+                pool_shape=(1,1),
+                pool_stride=(1,1),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 P2 layers:"
+            
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(512, 512, 2, 2),
+                pool_shape=(2,2),
+                pool_stride=(2,2),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 layer:"
+                
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(1024, 512, 2, 2),
                 pool_shape=(1,1),
                 pool_stride=(1,1),
                 BN = BN,                     
@@ -211,8 +271,8 @@ if __name__ == "__main__":
             
             self.layer.append(ReLU_layer(
                     rng = rng, 
-                    n_inputs = 256*3*3, 
-                    n_units = 2048, 
+                    n_inputs = 1024, 
+                    n_units = 1024, 
                     BN = BN, 
                     BN_epsilon=BN_epsilon, 
                     dropout=dropout_hidden, 
@@ -226,7 +286,7 @@ if __name__ == "__main__":
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= 2048, 
+                n_inputs= 1024, 
                 n_units = 10, 
                 BN = BN,
                 BN_epsilon=BN_epsilon,
