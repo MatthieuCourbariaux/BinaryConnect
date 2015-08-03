@@ -25,7 +25,8 @@ import time
 
 from trainer import Trainer
 from model import Network
-from layer import linear_layer, ReLU_layer, Maxout_layer, ReLU_conv_layer  
+# from layer import linear_layer, ReLU_layer, ReLU_conv_layer  
+from layer import linear_layer, Maxout_layer, Maxout_conv_layer  
 
 # from pylearn2.datasets.mnist import MNIST
 from pylearn2.datasets.zca_dataset import ZCA_Dataset    
@@ -68,18 +69,19 @@ if __name__ == "__main__":
     # 10000 = (2*5)^4
     batch_size = 100
     # batch_size = int(sys.argv[1])
-    number_of_batches_on_gpu = 40000/batch_size
+    number_of_batches_on_gpu = 45000/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
     # dropout_input = .8
+    # dropout_hidden = 1.
     dropout_hidden = .7
     # dropout_hidden = float(sys.argv[2])
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 100 # 80, 50
+    n_epoch = 100
     # n_epoch = int(sys.argv[3])
     monitor_step = 2 
     # core_path = "cnn_exp/" + str(sys.argv)
@@ -122,19 +124,19 @@ if __name__ == "__main__":
     train_set = ZCA_Dataset(
         preprocessed_dataset=serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
         preprocessor = preprocessor,
-        start=0, stop = 40000)
+        start=0, stop = 45000)
     valid_set = ZCA_Dataset(
         preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
         preprocessor = preprocessor,
-        start=40000, stop = 50000)  
+        start=45000, stop = 50000)  
     test_set = ZCA_Dataset(
         preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/test.pkl"), 
         preprocessor = preprocessor)
     
     # bc01 format
     # print train_set.X.shape
-    train_set.X = train_set.X.reshape(40000,3,32,32)
-    valid_set.X = valid_set.X.reshape(10000,3,32,32)
+    train_set.X = train_set.X.reshape(45000,3,32,32)
+    valid_set.X = valid_set.X.reshape(5000,3,32,32)
     test_set.X = test_set.X.reshape(10000,3,32,32)
     
     # Onehot the targets
@@ -162,9 +164,10 @@ if __name__ == "__main__":
             
             print "    C4 P3S2 layer:"
                 
-            self.layer.append(ReLU_conv_layer(
+            self.layer.append(Maxout_conv_layer(
                 rng,
                 filter_shape=(128, 3, 4, 4),
+                n_pieces = 2,
                 pool_shape=(3,3),
                 pool_stride=(2,2),
                 BN = BN,                     
@@ -177,9 +180,10 @@ if __name__ == "__main__":
             
             print "    C4 P3S2 layer:"
                 
-            self.layer.append(ReLU_conv_layer(
+            self.layer.append(Maxout_conv_layer(
                 rng,
                 filter_shape=(256, 128, 4, 4),
+                n_pieces = 2,
                 pool_shape=(3,3),
                 pool_stride=(2,2),
                 BN = BN,                     
@@ -192,9 +196,10 @@ if __name__ == "__main__":
             
             print "    C4 layer:"
                 
-            self.layer.append(ReLU_conv_layer(
+            self.layer.append(Maxout_conv_layer(
                 rng,
                 filter_shape=(256, 256, 4, 4),
+                n_pieces = 2,
                 pool_shape=(1,1),
                 pool_stride=(1,1),
                 BN = BN,                     
@@ -207,24 +212,11 @@ if __name__ == "__main__":
             
             print "    FC layer:"
             
-            # self.layer.append(Maxout_layer(
-                    # rng = rng, 
-                    # n_inputs = 128*3*3, 
-                    # n_units = 512, 
-                    # n_pieces = 4, 
-                    # BN = BN, 
-                    # BN_epsilon=BN_epsilon, 
-                    # dropout=dropout_hidden, 
-                    # binary_training=binary_training, 
-                    # stochastic_training=stochastic_training,
-                    # binary_test=binary_test, 
-                    # stochastic_test=stochastic_test
-            # ))
-            
-            self.layer.append(ReLU_layer(
+            self.layer.append(Maxout_layer(
                     rng = rng, 
                     n_inputs = 256*3*3, 
-                    n_units = 2048, 
+                    n_units = 512, 
+                    n_pieces = 4, 
                     BN = BN, 
                     BN_epsilon=BN_epsilon, 
                     dropout=dropout_hidden, 
@@ -238,7 +230,7 @@ if __name__ == "__main__":
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= 2048, 
+                n_inputs= 512, 
                 n_units = 10, 
                 BN = BN,
                 BN_epsilon=BN_epsilon,

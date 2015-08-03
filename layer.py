@@ -420,9 +420,27 @@ class ReLU_conv_layer(conv_layer):
     
     def activation(self,z):
     
-        return T.maximum(0.,z)
-# Maxout conv layer   
-    # def activation(self,conv_out):
+        return T.maximum(0.,z)        
         
-        # conv_out = T.reshape(conv_out,(T.shape(conv_out)[0], T.shape(conv_out)[1]//self.n_pieces, self.n_pieces,T.shape(conv_out)[2],T.shape(conv_out)[3]))
-        # return T.max( conv_out,axis=2)
+class Maxout_conv_layer(conv_layer):
+    
+    def __init__(self, rng, 
+        filter_shape, pool_shape, pool_stride, n_pieces,
+        BN, BN_epsilon=1e-4,
+        binary_training=False, stochastic_training=False,
+        binary_test=False, stochastic_test=0):
+        
+        new_filter_shape = (filter_shape[0]*n_pieces,filter_shape[1],filter_shape[2],filter_shape[3])
+        
+        conv_layer.__init__(self, rng=rng, 
+            filter_shape=new_filter_shape, pool_shape=pool_shape, pool_stride=pool_stride,
+            BN=BN, BN_epsilon=BN_epsilon,
+            binary_training=binary_training, stochastic_training=stochastic_training,
+            binary_test=binary_test, stochastic_test=stochastic_test)
+            
+        self.n_pieces = n_pieces
+    
+    def activation(self,z):
+        
+        z = T.reshape(z,(T.shape(z)[0], T.shape(z)[1]//self.n_pieces, self.n_pieces,T.shape(z)[2],T.shape(z)[3]))
+        return T.max(z,axis=2)
