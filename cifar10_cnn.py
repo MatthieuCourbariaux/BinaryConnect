@@ -25,8 +25,8 @@ import time
 
 from trainer import Trainer
 from model import Network
-# from layer import linear_layer, ReLU_layer, ReLU_conv_layer  
-from layer import linear_layer, Maxout_layer, Maxout_conv_layer  
+from layer import linear_layer, ReLU_layer, ReLU_conv_layer  
+# from layer import linear_layer, Maxout_layer, Maxout_conv_layer  
 
 # from pylearn2.datasets.mnist import MNIST
 from pylearn2.datasets.zca_dataset import ZCA_Dataset    
@@ -164,10 +164,9 @@ if __name__ == "__main__":
             
             print "    C4 P3S2 layer:"
                 
-            self.layer.append(Maxout_conv_layer(
+            self.layer.append(ReLU_conv_layer(
                 rng,
                 filter_shape=(128, 3, 4, 4),
-                n_pieces = 2,
                 pool_shape=(3,3),
                 pool_stride=(2,2),
                 BN = BN,                     
@@ -180,10 +179,9 @@ if __name__ == "__main__":
             
             print "    C4 P3S2 layer:"
                 
-            self.layer.append(Maxout_conv_layer(
+            self.layer.append(ReLU_conv_layer(
                 rng,
                 filter_shape=(256, 128, 4, 4),
-                n_pieces = 2,
                 pool_shape=(3,3),
                 pool_stride=(2,2),
                 BN = BN,                     
@@ -196,10 +194,9 @@ if __name__ == "__main__":
             
             print "    C4 layer:"
                 
-            self.layer.append(Maxout_conv_layer(
+            self.layer.append(ReLU_conv_layer(
                 rng,
                 filter_shape=(256, 256, 4, 4),
-                n_pieces = 2,
                 pool_shape=(1,1),
                 pool_stride=(1,1),
                 BN = BN,                     
@@ -212,11 +209,10 @@ if __name__ == "__main__":
             
             print "    FC layer:"
             
-            self.layer.append(Maxout_layer(
+            self.layer.append(ReLU_layer(
                     rng = rng, 
                     n_inputs = 256*3*3, 
-                    n_units = 512, 
-                    n_pieces = 4, 
+                    n_units = 2048, 
                     BN = BN, 
                     BN_epsilon=BN_epsilon, 
                     dropout=dropout_hidden, 
@@ -230,7 +226,7 @@ if __name__ == "__main__":
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= 512, 
+                n_inputs= 2048, 
                 n_units = 10, 
                 BN = BN,
                 BN_epsilon=BN_epsilon,
