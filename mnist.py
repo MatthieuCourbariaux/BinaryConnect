@@ -25,7 +25,7 @@ import time
 
 from trainer import Trainer
 from model import Network
-from layer import linear_layer, ReLU_layer, ReLU_conv_layer  
+from layer import linear_layer, ReLU_layer  
 
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     
     rng = np.random.RandomState(1234)
     train_set_size = 50000
-    # train_set_size = 128 # for testing data augmentation
+    # train_set_size = 100 # for testing data augmentation
     
     # data augmentation
     zero_pad = 0
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # batch
     # keep a multiple a factor of 10000 if possible
     # 10000 = (2*5)^4
-    batch_size = 1000
+    batch_size = 200
     number_of_batches_on_gpu = train_set_size/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
@@ -75,34 +75,34 @@ if __name__ == "__main__":
     shuffle_examples = True
     shuffle_batches = False
 
+    # Termination criteria
+    n_epoch = 1000
+    monitor_step = 2
+    # core_path = "mlp_exp/" + str(sys.argv)
+    load_path = None    
+    # load_path = core_path + ".pkl"
+    save_path = None
+    # save_path = core_path + ".pkl"
+    
     # LR 
     LR = .3
-    LR_fin = LR/30.
-    LR_fin_epoch = 100
-    LR_decay = (LR_fin/LR)**(1./LR_fin_epoch)    
+    LR_fin = .01
+    LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
     
-    # Termination criteria
-    n_epoch = 0
-    monitor_step = 1
-    load_path = "mlp_exp/['mnist_mlp.py', '1234', '1.0', '1.0', '1000', '0.3', '0.003', '3', '0', '0'].pkl" 
-    save_path = None
-    
     # architecture
-    ReLU_slope = .0
+    n_inputs = 784
     n_units = 1024
     n_classes = 10
     n_hidden_layer = 3
     
     # BinaryConnect
     BinaryConnect = True
-    # BinaryConnect = int(sys.argv[8])
     stochastic = True
-    # stochastic = int(sys.argv[9])
     
     # Old hyperparameters
-    binary_training=True 
-    stochastic_training=True
+    binary_training=False 
+    stochastic_training=False
     binary_test=False
     stochastic_test=False
     if BinaryConnect == True:
@@ -133,11 +133,6 @@ if __name__ == "__main__":
     valid_set.y = 2* valid_set.y - 1.
     test_set.y = 2* test_set.y - 1.
     
-    # print train_set.X
-    # print np.shape(train_set.X)
-    # print np.max(train_set.X)
-    # print np.min(train_set.X)
-    
     print 'Creating the model'
     
     class PI_MNIST_model(Network):
@@ -147,22 +142,18 @@ if __name__ == "__main__":
             Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN)
             
             print "    Fully connected layer 1:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = 784, n_units = n_units, ReLU_slope=ReLU_slope,
+            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_inputs, n_units = n_units,
                 BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_input,
                 binary_training=binary_training, stochastic_training=stochastic_training,
                 binary_test=binary_test, stochastic_test=stochastic_test))
+            
+            for k in range(n_hidden_layer-1):
                 
-            print "    Fully connected layer 2:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units, ReLU_slope=ReLU_slope,
-                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
-                binary_training=binary_training, stochastic_training=stochastic_training,
-                binary_test=binary_test, stochastic_test=stochastic_test))
-                
-            print "    Fully connected layer 3:"
-            self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,  ReLU_slope=ReLU_slope,
-                BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
-                binary_training=binary_training, stochastic_training=stochastic_training,
-                binary_test=binary_test, stochastic_test=stochastic_test))
+                print "    Fully connected layer "+ str(k) +":"
+                self.layer.append(ReLU_layer(rng = rng, n_inputs = n_units, n_units = n_units,
+                    BN = BN, BN_epsilon=BN_epsilon, dropout=dropout_hidden, 
+                    binary_training=binary_training, stochastic_training=stochastic_training,
+                    binary_test=binary_test, stochastic_test=stochastic_test))
                 
             print "    L2 SVM layer:"
             self.layer.append(linear_layer(rng = rng, n_inputs = n_units, n_units = n_classes,
@@ -199,12 +190,6 @@ if __name__ == "__main__":
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
     
-    # print 'Save first hidden layer weights'
-    
-    # W = model.layer[1].W.get_value()
-    # import pickle
-    # pickle.dump( W, open( "W.pkl", "wb" ) )
-    
     print 'Display weights'
     
     import matplotlib.pyplot as plt
@@ -213,23 +198,11 @@ if __name__ == "__main__":
     
     W = np.transpose(model.layer[0].W.get_value())
     
-    print "min(W) = " + str(np.min(W))
-    print "max(W) = " + str(np.max(W))
-    print "mean(W) = " + str(np.mean(W))
-    print "mean(abs(W)) = " + str(np.mean(abs(W)))
-    print "var(W) = " + str(np.var(W))
-    
-    histogram = np.histogram(W,bins=1000)
-    # print histogram[0]
-    # print histogram[1]
-    np.savetxt("No_reg_histogram0.csv", histogram[0], delimiter=",")
-    np.savetxt("No_reg_histogram1.csv", histogram[1], delimiter=",")
-    
-    # plt.hist(W,bins=100)
-    # plt.show()
-    # plt.savefig('histogramme.png')
+    # histogram = np.histogram(W,bins=1000,range=(-.2,.2))
+    # np.savetxt(core_path + "_hist0.csv", histogram[0], delimiter=",")
+    # np.savetxt(core_path + "_hist1.csv", histogram[1], delimiter=",")
     
     W = tile_raster_images(W,(28,28),(4,4),(2, 2))
     plt.imshow(W, cmap = cm.Greys_r)
     # plt.show()
-    plt.savefig('No_reg_features.png')
+    plt.savefig(core_path + '_features.png')

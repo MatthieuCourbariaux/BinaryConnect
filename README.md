@@ -5,22 +5,39 @@
 * Python, Numpy, Scipy
 * Theano 0.6 (Bleeding edge version)
 * Pylearn2 0.1
+* PyTables (only for the SVHN dataset)
 
 ## Motivations
 
-Easily reproduce the results of:  
+This repository allows to easily reproduce the experimental results reported in:
 "BinaryConnect: Training Deep Neural Networks with binary weights during propagations".
 
-## How to run it
+## MNIST
 
-    python mnist_mlp.py
+    python mnist.py
     
-This python script will train a MLP on MNIST with the stochastic version of BinaryConnect.
-It should run for about an hour on an old GPU (Tesla M2050).
-The final test error should be around 1.2%.
+This python script trains a MLP on MNIST with the stochastic version of BinaryConnect.
+It should run for about 1 hour on a Tesla M2050 GPU.
+The final test error should be around 1.18%.
+
+## CIFAR-10
+
+    python cifar10.py
+    
+This python script trains a CNN on CIFAR-10 with the stochastic version of BinaryConnect.
+It should run for about 7 hours on a Titan Black GPU.
+The final test error should be around 12.20%.
+
+## SVHN
+
+    python svhn.py
+    
+This python script trains a CNN on SVHN with the stochastic version of BinaryConnect.
+It should run for about 15 hours on a Titan X GPU.
+The final test error should be around 2.66%.
 
 ## How to play with it
 
-mnist_mlp.py contains all the relevant hyperparameters.
-It is very straightforward to modify it.
+mnist.py, cifar10.py and svhn.py contain all the relevant hyperparameters.
+It is very straightforward to modify them.
 layer.py contains the binarization function (binarize_weights).

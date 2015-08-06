@@ -26,8 +26,11 @@ import time
 from trainer import Trainer
 from model import Network
 from layer import linear_layer, ReLU_layer, ReLU_conv_layer  
+# from layer import linear_layer, Maxout_layer, Maxout_conv_layer  
 
-from pylearn2.datasets.mnist import MNIST
+# from pylearn2.datasets.mnist import MNIST
+from pylearn2.datasets.zca_dataset import ZCA_Dataset    
+# from pylearn2.datasets.svhn import SVHN
 from pylearn2.utils import serial
           
 def onehot(x,numclasses=None):
@@ -53,9 +56,6 @@ if __name__ == "__main__":
     print 'Hyperparameters' 
     
     rng = np.random.RandomState(1234)
-    # rng = np.random.RandomState(int(sys.argv[1]))
-    train_set_size = 50000
-    # train_set_size = 100 # for testing data augmentation
     
     # data augmentation
     zero_pad = 0
@@ -64,24 +64,20 @@ if __name__ == "__main__":
     horizontal_flip = False
     
     # batch
-    # keep a multiple a factor of 10000 if possible
+    # keep a factor of 10000 if possible
     # 10000 = (2*5)^4
     batch_size = 100
-    number_of_batches_on_gpu = train_set_size/batch_size
+    number_of_batches_on_gpu = 45000/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
-    dropout_input = .9
-    # dropout_input = float(sys.argv[2])
-    dropout_hidden = .75
-    # dropout_hidden = float(sys.argv[3])
+    dropout_hidden = 1.
     shuffle_examples = True
     shuffle_batches = False
 
     # Termination criteria
-    n_epoch = 100
-    # n_epoch = int(sys.argv[4])
-    monitor_step = 2
+    n_epoch = 300
+    monitor_step = 2 
     # core_path = "cnn_exp/" + str(sys.argv)
     load_path = None    
     # load_path = core_path + ".pkl"
@@ -90,28 +86,14 @@ if __name__ == "__main__":
     # print save_path
     
     # LR 
-    LR = .03
-    # LR = float(sys.argv[5])
-    LR_fin = .03
-    # LR_fin = float(sys.argv[6])
-    # LR_decay = 1. 
+    LR = .3
+    LR_fin = .001
     LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
     
-    # architecture
-    # greatly inspired from http://arxiv.org/pdf/1412.6071v4.pdf
-    ReLU_slope = 0.
-    channel_size = 30
-    n_channels = 16# number of channels of the first layer
-    n_classes = 10
-    length = 3 # number of C2-C2-MP2
-    n_hidden_layer = (length+1)*2
-    
     # BinaryConnect
-    BinaryConnect = False
-    # BinaryConnect = int(sys.argv[8])
-    stochastic = False
-    # stochastic = int(sys.argv[9])
+    BinaryConnect = True
+    stochastic = True
     
     # Old hyperparameters
     binary_training=False 
@@ -127,14 +109,24 @@ if __name__ == "__main__":
     
     print 'Loading the dataset' 
     
-    train_set = MNIST(which_set= 'train', start=0, stop = train_set_size, center = True)
-    valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
-    test_set = MNIST(which_set= 'test', center = True)
+    preprocessor = serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/preprocessor.pkl")
+    train_set = ZCA_Dataset(
+        preprocessed_dataset=serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
+        preprocessor = preprocessor,
+        start=0, stop = 45000)
+    valid_set = ZCA_Dataset(
+        preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
+        preprocessor = preprocessor,
+        start=45000, stop = 50000)  
+    test_set = ZCA_Dataset(
+        preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/test.pkl"), 
+        preprocessor = preprocessor)
     
     # bc01 format
-    train_set.X = train_set.X.reshape(train_set_size,1,28,28)
-    valid_set.X = valid_set.X.reshape(10000,1,28,28)
-    test_set.X = test_set.X.reshape(10000,1,28,28)
+    # print train_set.X.shape
+    train_set.X = train_set.X.reshape(45000,3,32,32)
+    valid_set.X = valid_set.X.reshape(5000,3,32,32)
+    test_set.X = test_set.X.reshape(10000,3,32,32)
     
     # Onehot the targets
     train_set.y = np.float32(onehot(train_set.y))
@@ -157,59 +149,16 @@ if __name__ == "__main__":
 
         def __init__(self, rng):
 
-            Network.__init__(self, n_hidden_layer = n_hidden_layer, BN = BN)
+            Network.__init__(self, n_hidden_layer = 8, BN = BN)
             
-            local_channel_size = channel_size
-            
-            for i in range(length):
+            print "    C3 layer:"
                 
-                print "    C2 layer:"
-                
-                self.layer.append(ReLU_conv_layer(
-                    rng,
-                    image_shape=(batch_size, n_channels * i + (i==0), local_channel_size, local_channel_size),
-                    filter_shape=(n_channels*(i+1), n_channels * i + (i==0), 2, 2),
-                    pool_shape=(1,1),
-                    ReLU_slope = ReLU_slope,
-                    BN = BN,                     
-                    BN_epsilon=BN_epsilon,
-                    binary_training=binary_training, 
-                    stochastic_training=stochastic_training,
-                    binary_test=binary_test, 
-                    stochastic_test=stochastic_test
-                ))
-                
-                # valid C2
-                local_channel_size = local_channel_size-1
-                
-                print "    C2 + MP2 layer:"
-                
-                self.layer.append(ReLU_conv_layer(
-                    rng,
-                    image_shape=(batch_size, n_channels*(i+1), local_channel_size, local_channel_size),
-                    filter_shape=(n_channels*(i+1), n_channels*(i+1), 2, 2),
-                    pool_shape=(2, 2),
-                    ReLU_slope = ReLU_slope,
-                    BN = BN,
-                    BN_epsilon=BN_epsilon,
-                    binary_training=binary_training, 
-                    stochastic_training=stochastic_training,
-                    binary_test=binary_test, 
-                    stochastic_test=stochastic_test
-                ))
-                
-                # valid C2 and MP2
-                local_channel_size = (local_channel_size-1)/2
-            
-            print "    C2 layer:"
-            
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, n_channels*length, local_channel_size, local_channel_size),
-                filter_shape=(n_channels*(length+1), n_channels*length, 2, 2),
+                filter_shape=(128, 3, 3, 3),
                 pool_shape=(1,1),
-                ReLU_slope = ReLU_slope,
-                BN = BN,
+                pool_stride=(1,1),
+                BN = BN,                     
                 BN_epsilon=BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
@@ -217,31 +166,117 @@ if __name__ == "__main__":
                 stochastic_test=stochastic_test
             ))
             
-            # valid C2
-            local_channel_size = local_channel_size-1
-            
-            # print "    C1 layer:"
-            
+            print "    C3 P2 layers:"
+                
             self.layer.append(ReLU_conv_layer(
                 rng,
-                image_shape=(batch_size, n_channels*(length+1), local_channel_size, local_channel_size),
-                filter_shape=(n_channels*(length+2), n_channels*(length+1), 1, 1),
-                pool_shape=(1,1),
-                ReLU_slope = ReLU_slope,
-                BN = BN,
+                filter_shape=(128, 128, 3, 3),
+                pool_shape=(2,2),
+                pool_stride=(2,2),
+                BN = BN,                     
                 BN_epsilon=BN_epsilon,
                 binary_training=binary_training, 
                 stochastic_training=stochastic_training,
                 binary_test=binary_test, 
                 stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 layer:"
+                
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(256, 128, 2, 2),
+                pool_shape=(1,1),
+                pool_stride=(1,1),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 P2 layers:"
+            
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(256, 256, 2, 2),
+                pool_shape=(2,2),
+                pool_stride=(2,2),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 layer:"
+                
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(512, 256, 2, 2),
+                pool_shape=(1,1),
+                pool_stride=(1,1),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 P2 layers:"
+            
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(512, 512, 2, 2),
+                pool_shape=(2,2),
+                pool_stride=(2,2),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    C2 layer:"
+                
+            self.layer.append(ReLU_conv_layer(
+                rng,
+                filter_shape=(1024, 512, 2, 2),
+                pool_shape=(1,1),
+                pool_stride=(1,1),
+                BN = BN,                     
+                BN_epsilon=BN_epsilon,
+                binary_training=binary_training, 
+                stochastic_training=stochastic_training,
+                binary_test=binary_test, 
+                stochastic_test=stochastic_test
+            ))
+            
+            print "    FC layer:"
+            
+            self.layer.append(ReLU_layer(
+                    rng = rng, 
+                    n_inputs = 1024, 
+                    n_units = 1024, 
+                    BN = BN, 
+                    BN_epsilon=BN_epsilon, 
+                    dropout=dropout_hidden, 
+                    binary_training=binary_training, 
+                    stochastic_training=stochastic_training,
+                    binary_test=binary_test, 
+                    stochastic_test=stochastic_test
             ))
             
             print "    L2 SVM layer:"
             
             self.layer.append(linear_layer(
                 rng = rng, 
-                n_inputs= n_channels*(length+2)*local_channel_size*local_channel_size, 
-                n_units = n_classes, 
+                n_inputs= 1024, 
+                n_units = 10, 
                 BN = BN,
                 BN_epsilon=BN_epsilon,
                 dropout = dropout_hidden,
@@ -279,31 +314,3 @@ if __name__ == "__main__":
     trainer.train()
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
-    
-    # print 'Save first hidden layer weights'
-    
-    # W = model.layer[1].W.get_value()
-    # import pickle
-    # pickle.dump( W, open( "W.pkl", "wb" ) )
-    
-    # print 'Display weights'
-    
-    # import matplotlib.pyplot as plt
-    # import matplotlib.cm as cm
-    # from filter_plot import tile_raster_images
-    
-    # W = np.transpose(model.layer[0].W.get_value())
-    
-    # print "min(W) = " + str(np.min(W))
-    # print "max(W) = " + str(np.max(W))
-    # print "mean(W) = " + str(np.mean(W))
-    # print "mean(abs(W)) = " + str(np.mean(abs(W)))
-    # print "var(W) = " + str(np.var(W))
-    
-    # plt.hist(W,bins=100)
-    # plt.show()
-    
-    # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
-    # plt.imshow(W, cmap = cm.Greys_r)
-    # plt.show()
-

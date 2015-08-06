@@ -29,25 +29,9 @@ from layer import linear_layer, ReLU_layer, ReLU_conv_layer
 # from layer import linear_layer, Maxout_layer, Maxout_conv_layer  
 
 # from pylearn2.datasets.mnist import MNIST
-from pylearn2.datasets.zca_dataset import ZCA_Dataset    
-# from pylearn2.datasets.svhn import SVHN
+# from pylearn2.datasets.zca_dataset import ZCA_Dataset    
+from pylearn2.datasets.svhn import SVHN
 from pylearn2.utils import serial
-          
-def onehot(x,numclasses=None):
-
-    if x.shape==():
-        x = x[None]
-    if numclasses is None:
-        numclasses = np.max(x) + 1
-    result = np.zeros(list(x.shape) + [numclasses], dtype="int")
-    z = np.zeros(x.shape, dtype="int")
-    for c in range(numclasses):
-        z *= 0
-        z[np.where(x==c)] = 1
-        result[...,c] += z
-
-    result = np.reshape(result,(np.shape(result)[0], np.shape(result)[result.ndim-1]))
-    return result
        
 # MAIN
 
@@ -56,7 +40,6 @@ if __name__ == "__main__":
     print 'Hyperparameters' 
     
     rng = np.random.RandomState(1234)
-    # rng = np.random.RandomState(int(sys.argv[1]))
     
     # data augmentation
     zero_pad = 0
@@ -68,43 +51,32 @@ if __name__ == "__main__":
     # keep a factor of 10000 if possible
     # 10000 = (2*5)^4
     batch_size = 100
-    # batch_size = int(sys.argv[1])
-    number_of_batches_on_gpu = 45000/batch_size
+    number_of_batches_on_gpu = 50000/batch_size
     BN = True
     BN_epsilon=1e-4 # for numerical stability
     BN_fast_eval= True
-    # dropout_input = .8
     dropout_hidden = 1.
-    # dropout_hidden = .7
-    # dropout_hidden = float(sys.argv[2])
-    shuffle_examples = True
-    shuffle_batches = False
+    shuffle_examples = False
+    shuffle_batches = True
 
     # Termination criteria
-    n_epoch = 200
-    # n_epoch = int(sys.argv[3])
-    monitor_step = 2 
+    n_epoch = 60
+    monitor_step = 1 
     # core_path = "cnn_exp/" + str(sys.argv)
     load_path = None    
     # load_path = core_path + ".pkl"
     save_path = None
     # save_path = core_path + ".pkl"
-    # print save_path
     
     # LR 
     LR = .3
-    # LR = float(sys.argv[4])
     LR_fin = .001
-    # LR_fin = float(sys.argv[5])
-    # LR_decay = 1. 
     LR_decay = (LR_fin/LR)**(1./n_epoch)    
     M= 0.
     
     # BinaryConnect
     BinaryConnect = True
-    # BinaryConnect = int(sys.argv[7])
     stochastic = True
-    # stochastic = int(sys.argv[8])
     
     # Old hyperparameters
     binary_training=False 
@@ -120,39 +92,31 @@ if __name__ == "__main__":
     
     print 'Loading the dataset' 
     
-    preprocessor = serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/preprocessor.pkl")
-    train_set = ZCA_Dataset(
-        preprocessed_dataset=serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
-        preprocessor = preprocessor,
-        start=0, stop = 45000)
-    valid_set = ZCA_Dataset(
-        preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
-        preprocessor = preprocessor,
-        start=45000, stop = 50000)  
-    test_set = ZCA_Dataset(
-        preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/test.pkl"), 
-        preprocessor = preprocessor)
+    train_set = SVHN(
+            which_set= 'splitted_train',
+            path= "${SVHN_LOCAL_PATH}",
+            axes= ['b', 'c', 0, 1])
+     
+    valid_set = SVHN(
+        which_set= 'valid',
+        path= "${SVHN_LOCAL_PATH}",
+        axes= ['b', 'c', 0, 1])
+    
+    test_set = SVHN(
+        which_set= 'test',
+        path= "${SVHN_LOCAL_PATH}",
+        axes= ['b', 'c', 0, 1])
     
     # bc01 format
     # print train_set.X.shape
-    train_set.X = train_set.X.reshape(45000,3,32,32)
-    valid_set.X = valid_set.X.reshape(5000,3,32,32)
-    test_set.X = test_set.X.reshape(10000,3,32,32)
-    
-    # Onehot the targets
-    train_set.y = np.float32(onehot(train_set.y))
-    valid_set.y = np.float32(onehot(valid_set.y))
-    test_set.y = np.float32(onehot(test_set.y))
+    train_set.X = np.reshape(train_set.X,(598388,3,32,32))
+    valid_set.X = np.reshape(valid_set.X,(6000,3,32,32))
+    test_set.X = np.reshape(test_set.X,(26032,3,32,32))
     
     # for hinge loss
-    train_set.y = 2* train_set.y - 1.
-    valid_set.y = 2* valid_set.y - 1.
-    test_set.y = 2* test_set.y - 1.
-    
-    # print train_set.X
-    # print np.shape(train_set.X)
-    # print np.max(train_set.X)
-    # print np.min(train_set.X)
+    train_set.y = np.subtract(np.multiply(2,train_set.y),1.)
+    valid_set.y = np.subtract(np.multiply(2,valid_set.y),1.)
+    test_set.y = np.subtract(np.multiply(2,test_set.y),1.)
     
     print 'Creating the model'
     
@@ -325,31 +289,3 @@ if __name__ == "__main__":
     trainer.train()
     end_time = time.clock()
     print 'The training took %i seconds'%(end_time - start_time)
-    
-    # print 'Save first hidden layer weights'
-    
-    # W = model.layer[1].W.get_value()
-    # import pickle
-    # pickle.dump( W, open( "W.pkl", "wb" ) )
-    
-    # print 'Display weights'
-    
-    # import matplotlib.pyplot as plt
-    # import matplotlib.cm as cm
-    # from filter_plot import tile_raster_images
-    
-    # W = np.transpose(model.layer[0].W.get_value())
-    
-    # print "min(W) = " + str(np.min(W))
-    # print "max(W) = " + str(np.max(W))
-    # print "mean(W) = " + str(np.mean(W))
-    # print "mean(abs(W)) = " + str(np.mean(abs(W)))
-    # print "var(W) = " + str(np.var(W))
-    
-    # plt.hist(W,bins=100)
-    # plt.show()
-    
-    # W = tile_raster_images(W,(28,28),(5,5),(2, 2))
-    # plt.imshow(W, cmap = cm.Greys_r)
-    # plt.show()
-
