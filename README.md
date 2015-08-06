@@ -29,6 +29,11 @@ It should run for about 7 hours on a Titan Black GPU.
 The final test error should be around 12.20%.
 
 ## SVHN
+    
+    SVHN_LOCAL_PATH=/tmp/SVHN/
+    svhn_preprocessing.py
+    
+This python script (taken from Pylearn2) put a preprocessed version of the dataset in a temporary folder.
 
     python svhn.py
     
