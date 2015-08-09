@@ -32,7 +32,7 @@ The final test error should be around 12.20%.
 ## SVHN
     
     export SVHN_LOCAL_PATH=/tmp/SVHN/
-    svhn_preprocessing.py
+    python svhn_preprocessing.py
     
 This python script (taken from Pylearn2) computes a preprocessed version of the SVHN dataset in a temporary folder.
 
