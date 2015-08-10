@@ -37,8 +37,6 @@ from pylearn2.utils import serial
 
 if __name__ == "__main__":
     
-    print 'Hyperparameters' 
-    
     rng = np.random.RandomState(1234)
     
     # data augmentation

@@ -29,28 +29,10 @@ from layer import linear_layer, ReLU_layer
 
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
-          
-def onehot(x,numclasses=None):
-
-    if x.shape==():
-        x = x[None]
-    if numclasses is None:
-        numclasses = np.max(x) + 1
-    result = np.zeros(list(x.shape) + [numclasses], dtype="int")
-    z = np.zeros(x.shape, dtype="int")
-    for c in range(numclasses):
-        z *= 0
-        z[np.where(x==c)] = 1
-        result[...,c] += z
-
-    result = np.reshape(result,(np.shape(result)[0], np.shape(result)[result.ndim-1]))
-    return result
        
 # MAIN
 
 if __name__ == "__main__":
-    
-    print 'Hyperparameters' 
     
     rng = np.random.RandomState(1234)
     train_set_size = 50000
@@ -123,10 +105,15 @@ if __name__ == "__main__":
     valid_set.X = valid_set.X.reshape(10000,1,28,28)
     test_set.X = test_set.X.reshape(10000,1,28,28)
     
+    # flatten targets
+    train_set.y = np.hstack(train_set.y)
+    valid_set.y = np.hstack(valid_set.y)
+    test_set.y = np.hstack(test_set.y)
+    
     # Onehot the targets
-    train_set.y = np.float32(onehot(train_set.y))
-    valid_set.y = np.float32(onehot(valid_set.y))
-    test_set.y = np.float32(onehot(test_set.y))
+    train_set.y = np.float32(np.eye(10)[train_set.y])    
+    valid_set.y = np.float32(np.eye(10)[valid_set.y])
+    test_set.y = np.float32(np.eye(10)[test_set.y])
     
     # for hinge loss
     train_set.y = 2* train_set.y - 1.
