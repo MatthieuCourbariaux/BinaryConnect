@@ -135,15 +135,18 @@ if __name__ == "__main__":
     train_output = lasagne.layers.get_output(mlp)
     # squared hinge loss
     loss = T.mean(T.sqr(T.maximum(0.,1.-target*train_output)))
+    
     params = lasagne.layers.get_all_params(mlp, trainable=True)
-    # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.1, momentum=0.9)
-    updates = lasagne.updates.adam(loss, params)
+    
+    
+    # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
+    updates = lasagne.updates.adam(loss_or_grads=loss, params=params)
     updates = weights_clipping(updates)
 
     test_output = lasagne.layers.get_output(mlp, deterministic=True)
     test_loss = T.mean(T.sqr(T.maximum(0.,1.-target*test_output)))
     test_err = T.mean(T.neq(T.argmax(test_output, axis=1), T.argmax(target, axis=1)),dtype=theano.config.floatX)
-
+    
     # Compile a function performing a training step on a mini-batch (by giving the updates dictionary) 
     # and returning the corresponding training loss:
     train_fn = theano.function([input, target], loss, updates=updates)
@@ -232,6 +235,15 @@ if __name__ == "__main__":
         print("  best validation error rate:    "+str(best_val_err)+"%")
         print("  test loss:                     "+str(test_loss))
         print("  test error rate:               "+str(test_err)+"%") 
-
+    
+    print("display histogram")
+    
+    W = lasagne.layers.get_all_layers(mlp)[1].W.get_value()
+    # print(W.shape)
+    
+    histogram = np.histogram(W,bins=1000,range=(-1.1,1.1))
+    np.savetxt("_hist0.csv", histogram[0], delimiter=",")
+    np.savetxt("_hist1.csv", histogram[1], delimiter=",")
+    
     # Optionally, you could now dump the network weights to a file like this:
     # np.savez('model.npz', lasagne.layers.get_all_param_values(network))
