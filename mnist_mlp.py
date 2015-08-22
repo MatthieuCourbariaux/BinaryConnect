@@ -15,9 +15,8 @@ import lasagne
 import cPickle as pickle
 import gzip
 
-from batch_norm import BatchNormLayer
-
-from binary_connect import weights_clipping, BinaryDenseLayer
+import batch_norm
+import binary_connect
 
 if __name__ == "__main__":
     
@@ -34,6 +33,16 @@ if __name__ == "__main__":
     # Training parameters
     num_epochs = 500
     batch_size = 200
+    
+    # BinaryConnect
+    BC = True
+    w0 = 1.
+    # w0 = .5
+    # w0 = .25
+    # w0 = .125
+    # w0 = .0625
+    # w0 = .03125
+    stochatic_rounding = True
     
     print('Loading MNIST dataset...')
 
@@ -95,18 +104,13 @@ if __name__ == "__main__":
             # p=0.2)
     
     for k in range(n_hidden_layers):
-    
-        # mlp = lasagne.layers.DenseLayer(
-                # mlp, 
-                # nonlinearity=lasagne.nonlinearities.identity,
-                # num_units=num_units)  
 
-        mlp = BinaryDenseLayer(
+        mlp = binary_connect.DenseLayer(
                 mlp, 
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=num_units)                  
         
-        mlp = BatchNormLayer(
+        mlp = batch_norm.BatchNormLayer(
                 mlp,
                 epsilon=epsilon, 
                 alpha=alpha,
@@ -116,17 +120,12 @@ if __name__ == "__main__":
                 # mlp, 
                 # p=0.5)
     
-    mlp = BinaryDenseLayer(
+    mlp = binary_connect.DenseLayer(
                 mlp, 
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=10) 
-                
-    # mlp = lasagne.layers.DenseLayer(
-            # mlp, 
-            # nonlinearity=lasagne.nonlinearities.identity,
-            # num_units=10) 
                   
-    mlp = BatchNormLayer(
+    mlp = batch_norm.BatchNormLayer(
             mlp,
             epsilon=epsilon, 
             alpha=alpha,
@@ -137,11 +136,12 @@ if __name__ == "__main__":
     loss = T.mean(T.sqr(T.maximum(0.,1.-target*train_output)))
     
     params = lasagne.layers.get_all_params(mlp, trainable=True)
-    
+    grads = binary_connect.compute_grads(loss,mlp)
     
     # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
-    updates = lasagne.updates.adam(loss_or_grads=loss, params=params)
-    updates = weights_clipping(updates)
+    updates = lasagne.updates.adam(loss_or_grads=grads, params=params)
+    # updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=0.01)
+    updates = binary_connect.weights_clipping(updates)
 
     test_output = lasagne.layers.get_output(mlp, deterministic=True)
     test_loss = T.mean(T.sqr(T.maximum(0.,1.-target*test_output)))
