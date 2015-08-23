@@ -7,6 +7,9 @@ import time
 import numpy as np
 np.random.seed(1234)  # for reproducibility
 
+# specifying the gpu to use
+# import theano.sandbox.cuda
+# theano.sandbox.cuda.use('gpu1') 
 import theano
 import theano.tensor as T
 
@@ -21,6 +24,7 @@ import binary_connect
 if __name__ == "__main__":
     
     # BN parameters
+    batch_size = 200
     # alpha = .1 # for a minibatch of size 50
     # alpha = .2 # for a minibatch of size 100
     alpha = .33 # for a minibatch of size 200
@@ -31,18 +35,16 @@ if __name__ == "__main__":
     n_hidden_layers = 3
     
     # Training parameters
-    num_epochs = 500
-    batch_size = 200
+    num_epochs = 1000
+    
+    # Dropout parameters
+    dropout_in = 0.
+    dropout_hidden = 0.
     
     # BinaryConnect
-    BC = True
-    w0 = 1.
-    # w0 = .5
-    # w0 = .25
-    # w0 = .125
-    # w0 = .0625
-    # w0 = .03125
-    stochatic_rounding = True
+    binary = True
+    stochastic = True
+    H = 1./(1<<4)
     
     print('Loading MNIST dataset...')
 
@@ -99,14 +101,17 @@ if __name__ == "__main__":
             shape=(None, 1, 28, 28),
             input_var=input)
 
-    # mlp = lasagne.layers.DropoutLayer(
-            # mlp, 
-            # p=0.2)
+    mlp = lasagne.layers.DropoutLayer(
+            mlp, 
+            p=dropout_in)
     
     for k in range(n_hidden_layers):
 
         mlp = binary_connect.DenseLayer(
                 mlp, 
+                binary=binary,
+                stochastic=stochastic,
+                H=H,
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=num_units)                  
         
@@ -116,14 +121,17 @@ if __name__ == "__main__":
                 alpha=alpha,
                 nonlinearity=lasagne.nonlinearities.rectify)
                 
-        # mlp = lasagne.layers.DropoutLayer(
-                # mlp, 
-                # p=0.5)
+        mlp = lasagne.layers.DropoutLayer(
+                mlp, 
+                p=dropout_hidden)
     
     mlp = binary_connect.DenseLayer(
                 mlp, 
+                binary=binary,
+                stochastic=stochastic,
+                H=H,
                 nonlinearity=lasagne.nonlinearities.identity,
-                num_units=10) 
+                num_units=10)      
                   
     mlp = batch_norm.BatchNormLayer(
             mlp,
@@ -131,17 +139,21 @@ if __name__ == "__main__":
             alpha=alpha,
             nonlinearity=lasagne.nonlinearities.identity)
 
-    train_output = lasagne.layers.get_output(mlp)
+    train_output = lasagne.layers.get_output(mlp, deterministic=False)
+    
     # squared hinge loss
     loss = T.mean(T.sqr(T.maximum(0.,1.-target*train_output)))
     
     params = lasagne.layers.get_all_params(mlp, trainable=True)
-    grads = binary_connect.compute_grads(loss,mlp)
     
-    # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
-    updates = lasagne.updates.adam(loss_or_grads=grads, params=params)
-    # updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=0.01)
-    updates = binary_connect.weights_clipping(updates)
+    if binary:
+        grads = binary_connect.compute_grads(loss,mlp)
+        updates = lasagne.updates.adam(loss_or_grads=grads, params=params)
+        updates = binary_connect.weights_clipping(updates,H) # using 2H instead of H with stochastic yields about 20% worse results
+        
+    else:
+        updates = lasagne.updates.adam(loss_or_grads=loss, params=params)
+        # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
 
     test_output = lasagne.layers.get_output(mlp, deterministic=True)
     test_loss = T.mean(T.sqr(T.maximum(0.,1.-target*test_output)))

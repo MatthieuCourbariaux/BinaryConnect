@@ -3,6 +3,9 @@ from collections import OrderedDict
 
 import numpy as np
 
+# specifying the gpu to use
+# import theano.sandbox.cuda
+# theano.sandbox.cuda.use('gpu1') 
 import theano
 import theano.tensor as T
 
@@ -30,7 +33,7 @@ def compute_grads(loss,network):
                 
     return grads
 
-def weights_clipping(updates):
+def weights_clipping(updates, H):
     
     params = updates.keys()
     updates = OrderedDict(updates)
@@ -38,7 +41,7 @@ def weights_clipping(updates):
     for param in params:        
         if param.name == "W":
             # print("ok")
-            updates[param] = T.clip(updates[param], -1, 1)
+            updates[param] = T.clip(updates[param], -H, H)
 
     return updates
 
@@ -47,13 +50,21 @@ def hard_sigmoid(x):
     
 class DenseLayer(lasagne.layers.DenseLayer):
     
-    def __init__(self, incoming, num_units, stochastic_rounding = True, W=lasagne.init.Uniform((-1,1)), **kwargs):
+    def __init__(self, incoming, num_units, 
+        binary = True, stochastic = True, H=1., **kwargs):
         
-        super(BinaryDenseLayer, self).__init__(incoming, num_units, W, **kwargs)
+        self.binary = binary
+        self.stochastic = stochastic
+        self.H = H
         
-        self.stochastic_rounding = stochastic_rounding
-        if self.stochastic_rounding == True:
+        if self.stochastic:
             self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
+            
+        if self.binary:
+            super(DenseLayer, self).__init__(incoming, num_units, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs)   
+        
+        else:
+            super(DenseLayer, self).__init__(incoming, num_units, **kwargs)
         
     def get_output_for(self, input, deterministic=False, **kwargs):
     
@@ -63,16 +74,16 @@ class DenseLayer(lasagne.layers.DenseLayer):
             input = input.flatten(2)        
         
         # (deterministic == True) <-> test-time
-        if deterministic == True and self.stochastic_rounding == True:
-            self.Wb = self.W
+        if not self.binary or (deterministic and self.stochastic):
+            
+            activation = T.dot(input,self.W)
         
         else:
-        
             # [-1,1] -> [0,1]
-            self.Wb = hard_sigmoid(self.W)
+            self.Wb = hard_sigmoid(self.W/self.H)
             
             # Stochastic BinaryConnect
-            if self.stochastic_rounding == True:
+            if self.stochastic:
                 self.Wb = T.cast(self._srng.binomial(n=1, p=self.Wb, size=T.shape(self.Wb)), theano.config.floatX)
 
             # Deterministic BinaryConnect (round to nearest)
@@ -80,9 +91,10 @@ class DenseLayer(lasagne.layers.DenseLayer):
                 self.Wb = T.round(self.Wb)
             
             # 0 or 1 -> -1 or 1
-            self.Wb = T.cast(T.switch(self.Wb,1,-1), theano.config.floatX)
+            self.Wb = T.cast(T.switch(self.Wb,self.H,-self.H), theano.config.floatX)
         
-        activation = T.dot(input,self.Wb)
+            activation = T.dot(input,self.Wb)
+
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
         return self.nonlinearity(activation)
