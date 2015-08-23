@@ -22,6 +22,7 @@ import batch_norm
 import binary_connect
 
 if __name__ == "__main__":
+# def MNIST_exp(dropout_in,dropout_hidden,binary,stochastic,H):
     
     # BN parameters
     batch_size = 200
@@ -44,7 +45,15 @@ if __name__ == "__main__":
     # BinaryConnect
     binary = True
     stochastic = True
-    H = 1./(1<<4)
+    # H = (1./(1<<4))/10
+    # H = 1./(1<<4)
+    # H = .316
+    H = 1.
+    
+    # LR decay
+    # LR_start = .3
+    # LR_fin = .01
+    # LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
     
     print('Loading MNIST dataset...')
 
@@ -96,6 +105,7 @@ if __name__ == "__main__":
     # Prepare Theano variables for inputs and targets
     input = T.tensor4('inputs')
     target = T.matrix('targets')
+    # LR = T.scalar('LR', dtype=theano.config.floatX)
 
     mlp = lasagne.layers.InputLayer(
             shape=(None, 1, 28, 28),
@@ -148,8 +158,10 @@ if __name__ == "__main__":
     
     if binary:
         grads = binary_connect.compute_grads(loss,mlp)
-        updates = lasagne.updates.adam(loss_or_grads=grads, params=params)
-        updates = binary_connect.weights_clipping(updates,H) # using 2H instead of H with stochastic yields about 20% worse results
+        updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=0.001)
+        # updates = lasagne.updates.sgd(grads, params, learning_rate=.3) 
+        updates = binary_connect.weights_clipping(updates,H) 
+        # using 2H instead of H with stochastic yields about 20% worse results
         
     else:
         updates = lasagne.updates.adam(loss_or_grads=loss, params=params)
@@ -248,14 +260,36 @@ if __name__ == "__main__":
         print("  test loss:                     "+str(test_loss))
         print("  test error rate:               "+str(test_err)+"%") 
     
-    print("display histogram")
+    # print("display histogram")
     
-    W = lasagne.layers.get_all_layers(mlp)[1].W.get_value()
+    # W = lasagne.layers.get_all_layers(mlp)[2].W.get_value()
     # print(W.shape)
     
-    histogram = np.histogram(W,bins=1000,range=(-1.1,1.1))
-    np.savetxt("_hist0.csv", histogram[0], delimiter=",")
-    np.savetxt("_hist1.csv", histogram[1], delimiter=",")
+    # histogram = np.histogram(W,bins=1000,range=(-1.1,1.1))
+    # np.savetxt(str(dropout_hidden)+str(binary)+str(stochastic)+str(H)+"_hist0.csv", histogram[0], delimiter=",")
+    # np.savetxt(str(dropout_hidden)+str(binary)+str(stochastic)+str(H)+"_hist1.csv", histogram[1], delimiter=",")
     
     # Optionally, you could now dump the network weights to a file like this:
     # np.savez('model.npz', lasagne.layers.get_all_param_values(network))
+    
+# if __name__ == "__main__":
+if False:
+    
+    # baselines
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=False,stochastic=False,H=1.)
+    MNIST_exp(dropout_in=0.2,dropout_hidden=0.5,binary=False,stochastic=False,H=1.)
+    
+    # stochastic BC
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=True,H=1.)
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=True,H=1./(1<<2))
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=True,H=1./(1<<4))
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=True,H=1./(1<<6))
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=True,H=1./(1<<8))
+    
+    # deterministic BC
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=False,H=1.)
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=False,H=1./(1<<2))
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=False,H=1./(1<<4))
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=False,H=1./(1<<6))
+    MNIST_exp(dropout_in=0.,dropout_hidden=0.,binary=True,stochastic=False,H=1./(1<<8))
+    
