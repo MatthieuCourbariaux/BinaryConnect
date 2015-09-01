@@ -51,9 +51,9 @@ if __name__ == "__main__":
     H = 1.
     
     # LR decay
-    # LR_start = .3
-    # LR_fin = .01
-    # LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
+    LR_start = .001
+    LR_fin = .001
+    LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
     
     print('Loading MNIST dataset...')
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     # Prepare Theano variables for inputs and targets
     input = T.tensor4('inputs')
     target = T.matrix('targets')
-    # LR = T.scalar('LR', dtype=theano.config.floatX)
+    LR = T.scalar('LR', dtype=theano.config.floatX)
 
     mlp = lasagne.layers.InputLayer(
             shape=(None, 1, 28, 28),
@@ -158,10 +158,10 @@ if __name__ == "__main__":
     
     if binary:
         grads = binary_connect.compute_grads(loss,mlp)
-        updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=0.001)
+        updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=LR)
         # updates = lasagne.updates.sgd(grads, params, learning_rate=.3) 
         updates = binary_connect.weights_clipping(updates,H) 
-        # using 2H instead of H with stochastic yields about 20% worse results
+        # using 2H instead of H with stochastic yields about 20% relative worse results
         
     else:
         updates = lasagne.updates.adam(loss_or_grads=loss, params=params)
@@ -173,7 +173,8 @@ if __name__ == "__main__":
     
     # Compile a function performing a training step on a mini-batch (by giving the updates dictionary) 
     # and returning the corresponding training loss:
-    train_fn = theano.function([input, target], loss, updates=updates)
+    train_fn = theano.function([input, target, LR], loss, updates=updates)
+    # train_fn = theano.function([input, target], loss, updates=updates)
 
     # Compile a second function computing the validation loss and accuracy:
     val_fn = theano.function([input, target], [test_loss, test_err])
@@ -195,37 +196,51 @@ if __name__ == "__main__":
             new_y[i] = y[shuffled_range[i]]
             
         return new_X,new_y
+        
+    def train_epoch(X,y,batch_size,LR):
+        
+        loss = 0
+        batches = len(X)/batch_size
+        
+        for i in range(batches):
+            loss += train_fn(X[i*batch_size:(i+1)*batch_size],y[i*batch_size:(i+1)*batch_size],LR)
+        
+        loss/=batches
+        
+        return loss
+        
+    def val_epoch(X,y,batch_size):
+        
+        err = 0
+        loss = 0
+        batches = len(X)/batch_size
+        
+        for i in range(batches):
+            new_loss, new_err = val_fn(X[i*batch_size:(i+1)*batch_size], y[i*batch_size:(i+1)*batch_size])
+            err += new_err
+            loss += new_loss
+        
+        err = err / batches * 100
+        loss /= batches
+
+        return err, loss
     
     # shuffle the train set
     X_train,y_train = shuffle(X_train,y_train)
     best_val_err = 100
     best_epoch = 1
+    LR = LR_start
     
     # We iterate over epochs:
     for epoch in range(num_epochs):
-
-        # In each epoch, we do a full pass over the training data:
-        train_loss = 0
-        train_batches = len(X_train)/batch_size
+        
         start_time = time.time()
         
-        for i in range(train_batches):
-            train_loss += train_fn(X_train[i*batch_size:(i+1)*batch_size],y_train[i*batch_size:(i+1)*batch_size])
+        train_loss = train_epoch(X_train,y_train,batch_size,LR)
+        X_train,y_train = shuffle(X_train,y_train)
+        LR *= LR_decay
         
-        train_loss/=train_batches
-        
-        # And a full pass over the validation data:
-        val_err = 0
-        val_loss = 0
-        val_batches = len(X_val)/batch_size
-        
-        for i in range(val_batches):
-            loss, err = val_fn(X_val[i*batch_size:(i+1)*batch_size], y_val[i*batch_size:(i+1)*batch_size])
-            val_err += err
-            val_loss += loss
-        
-        val_err = val_err / val_batches * 100
-        val_loss /= val_batches
+        val_err, val_loss = val_epoch(X_val,y_val,batch_size)
         
         # test if validation error went down
         if val_err <= best_val_err:
@@ -233,25 +248,13 @@ if __name__ == "__main__":
             best_val_err = val_err
             best_epoch = epoch+1
             
-            test_err = 0
-            test_loss = 0
-            test_batches = len(X_test)/batch_size
-            
-            for i in range(test_batches):
-                loss, err = val_fn(X_test[i*batch_size:(i+1)*batch_size], y_test[i*batch_size:(i+1)*batch_size])
-                test_err += err
-                test_loss += loss
-                
-            test_err = test_err / test_batches * 100
-            test_loss /= test_batches
-        
-        # shuffle the train set
-        X_train,y_train = shuffle(X_train,y_train)
-        
+            test_err, test_loss = val_epoch(X_test,y_test,batch_size)
+
         epoch_duration = time.time() - start_time
         
         # Then we print the results for this epoch:
         print("Epoch "+str(epoch + 1)+" of "+str(num_epochs)+" took "+str(epoch_duration)+"s")
+        print("  LR:                            "+str(LR))
         print("  training loss:                 "+str(train_loss))
         print("  validation loss:               "+str(val_loss))
         print("  validation error rate:         "+str(val_err)+"%")
