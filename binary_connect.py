@@ -1,4 +1,6 @@
 
+import time
+
 from collections import OrderedDict
 
 import numpy as np
@@ -115,3 +117,93 @@ class DenseLayer(lasagne.layers.DenseLayer):
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
         return self.nonlinearity(activation)
+        
+def train(train_fn,val_fn,
+            batch_size,
+            LR_start,LR_decay,
+            num_epochs,
+            X_train,y_train,
+            X_val,y_val,
+            X_test,y_test):
+            
+    def shuffle(X,y):
+    
+        shuffled_range = range(len(X))
+        np.random.shuffle(shuffled_range)
+        # print(shuffled_range[0:10])
+        
+        new_X = np.copy(X)
+        new_y = np.copy(y)
+        
+        for i in range(len(X)):
+            
+            new_X[i] = X[shuffled_range[i]]
+            new_y[i] = y[shuffled_range[i]]
+            
+        return new_X,new_y
+        
+    def train_epoch(X,y,LR):
+        
+        loss = 0
+        batches = len(X)/batch_size
+        
+        for i in range(batches):
+            loss += train_fn(X[i*batch_size:(i+1)*batch_size],y[i*batch_size:(i+1)*batch_size],LR)
+        
+        loss/=batches
+        
+        return loss
+        
+    def val_epoch(X,y):
+        
+        err = 0
+        loss = 0
+        batches = len(X)/batch_size
+        
+        for i in range(batches):
+            new_loss, new_err = val_fn(X[i*batch_size:(i+1)*batch_size], y[i*batch_size:(i+1)*batch_size])
+            err += new_err
+            loss += new_loss
+        
+        err = err / batches * 100
+        loss /= batches
+
+        return err, loss
+    
+    # shuffle the train set
+    X_train,y_train = shuffle(X_train,y_train)
+    best_val_err = 100
+    best_epoch = 1
+    LR = LR_start
+    
+    # We iterate over epochs:
+    for epoch in range(num_epochs):
+        
+        start_time = time.time()
+        
+        train_loss = train_epoch(X_train,y_train,LR)
+        X_train,y_train = shuffle(X_train,y_train)
+        LR *= LR_decay
+        
+        val_err, val_loss = val_epoch(X_val,y_val)
+        
+        # test if validation error went down
+        if val_err <= best_val_err:
+            
+            best_val_err = val_err
+            best_epoch = epoch+1
+            
+            test_err, test_loss = val_epoch(X_test,y_test)
+
+        epoch_duration = time.time() - start_time
+        
+        # Then we print the results for this epoch:
+        print("Epoch "+str(epoch + 1)+" of "+str(num_epochs)+" took "+str(epoch_duration)+"s")
+        print("  LR:                            "+str(LR))
+        print("  training loss:                 "+str(train_loss))
+        print("  validation loss:               "+str(val_loss))
+        print("  validation error rate:         "+str(val_err)+"%")
+        print("  best epoch:                    "+str(best_epoch))
+        print("  best validation error rate:    "+str(best_val_err)+"%")
+        print("  test loss:                     "+str(test_loss))
+        print("  test error rate:               "+str(test_err)+"%") 
