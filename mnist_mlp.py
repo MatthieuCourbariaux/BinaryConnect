@@ -36,7 +36,7 @@ if __name__ == "__main__":
     n_hidden_layers = 3
     
     # Training parameters
-    num_epochs = 200
+    num_epochs = 100
     
     # Dropout parameters
     dropout_in = 0.
@@ -48,11 +48,11 @@ if __name__ == "__main__":
     # H = (1./(1<<4))/10
     # H = 1./(1<<4)
     # H = .316
-    H = 1.
+    # H = 1.
     
     # LR decay
-    LR_start = .02
-    LR_fin = .0002
+    LR_start = .001
+    LR_fin = .00001
     LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
     # BTW, LR decay is good for the moving average...
     
@@ -122,7 +122,7 @@ if __name__ == "__main__":
                 mlp, 
                 binary=binary,
                 stochastic=stochastic,
-                H=H,
+                # H=H,
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=num_units)                  
         
@@ -140,7 +140,7 @@ if __name__ == "__main__":
                 mlp, 
                 binary=binary,
                 stochastic=stochastic,
-                H=H,
+                # H=H,
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=10)      
                   
@@ -161,7 +161,8 @@ if __name__ == "__main__":
         grads = binary_connect.compute_grads(loss,mlp)
         updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=LR)
         # updates = lasagne.updates.sgd(grads, params, learning_rate=.3) 
-        updates = binary_connect.weights_clipping(updates,H) 
+        # updates = binary_connect.weights_clipping(updates,H) 
+        updates = binary_connect.weights_clipping(updates,mlp) 
         # using 2H instead of H with stochastic yields about 20% relative worse results
         
     else:

@@ -32,31 +32,31 @@ def compute_grads(loss,network):
                 
     return grads
 
-# def weights_clipping(updates,network,H):
+def weights_clipping(updates,network):
     
-    # layers = lasagne.layers.get_all_layers(network)
-    # updates = OrderedDict(updates)
-    
-    # for layer in layers:
-    
-        # params = layer.get_params(trainable=True)
-        
-        # for param in params:
-            # if param.name == "W":
-                # updates[param] = T.clip(updates[param], -H, H)           
-
-    # return updates
-    
-def weights_clipping(updates, H):
-    
-    params = updates.keys()
+    layers = lasagne.layers.get_all_layers(network)
     updates = OrderedDict(updates)
-
-    for param in params:        
-        if param.name == "W":            
-            updates[param] = T.clip(updates[param], -H, H)
+    
+    for layer in layers:
+    
+        params = layer.get_params(trainable=True)
+        
+        for param in params:
+            if param.name == "W":
+                updates[param] = T.clip(updates[param], -layer.H, layer.H)           
 
     return updates
+    
+# def weights_clipping(updates, H):
+    
+    # params = updates.keys()
+    # updates = OrderedDict(updates)
+
+    # for param in params:        
+        # if param.name == "W":            
+            # updates[param] = T.clip(updates[param], -H, H)
+
+    # return updates
 
 def hard_sigmoid(x):
     return T.clip((x+1.)/2.,0,1)
@@ -64,11 +64,15 @@ def hard_sigmoid(x):
 class DenseLayer(lasagne.layers.DenseLayer):
     
     def __init__(self, incoming, num_units, 
-        binary = True, stochastic = True, H=1., **kwargs):
+        # binary = True, stochastic = True, H=1., **kwargs):
+        binary = True, stochastic = True, **kwargs):
         
         self.binary = binary
         self.stochastic = stochastic
-        self.H = H
+        
+        # self.H = H
+        num_inputs = int(np.prod(incoming.output_shape[1:]))
+        self.H = np.float32(np.sqrt(6. / (num_inputs + num_units))/2.)
         
         if self.stochastic:
             self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
