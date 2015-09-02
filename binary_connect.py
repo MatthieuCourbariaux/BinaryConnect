@@ -20,7 +20,6 @@ def compute_grads(loss,network):
     
     for layer in layers:
     
-        # params = lasagne.layers.get_all_params(layer, trainable=True)
         params = layer.get_params(trainable=True)
         
         for param in params:
@@ -33,14 +32,28 @@ def compute_grads(loss,network):
                 
     return grads
 
+# def weights_clipping(updates,network,H):
+    
+    # layers = lasagne.layers.get_all_layers(network)
+    # updates = OrderedDict(updates)
+    
+    # for layer in layers:
+    
+        # params = layer.get_params(trainable=True)
+        
+        # for param in params:
+            # if param.name == "W":
+                # updates[param] = T.clip(updates[param], -H, H)           
+
+    # return updates
+    
 def weights_clipping(updates, H):
     
     params = updates.keys()
     updates = OrderedDict(updates)
 
     for param in params:        
-        if param.name == "W":
-            # print("ok")
+        if param.name == "W":            
             updates[param] = T.clip(updates[param], -H, H)
 
     return updates

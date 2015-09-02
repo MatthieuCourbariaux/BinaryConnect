@@ -36,7 +36,7 @@ if __name__ == "__main__":
     n_hidden_layers = 3
     
     # Training parameters
-    num_epochs = 1000
+    num_epochs = 200
     
     # Dropout parameters
     dropout_in = 0.
@@ -51,9 +51,10 @@ if __name__ == "__main__":
     H = 1.
     
     # LR decay
-    LR_start = .001
-    LR_fin = .001
+    LR_start = .02
+    LR_fin = .0002
     LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
+    # BTW, LR decay is good for the moving average...
     
     print('Loading MNIST dataset...')
 
