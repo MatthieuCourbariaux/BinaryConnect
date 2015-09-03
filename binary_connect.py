@@ -1,3 +1,19 @@
+# Copyright 2015 Matthieu Courbariaux
+
+# This file is part of BinaryConnect.
+
+# BinaryConnect is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# BinaryConnect is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with BinaryConnect.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
 
@@ -45,6 +61,7 @@ def weights_clipping(updates,network):
         
         for param in params:
             if param.name == "W":
+                # print("K")
                 updates[param] = T.clip(updates[param], -layer.H, layer.H)           
 
     return updates
@@ -74,7 +91,8 @@ class DenseLayer(lasagne.layers.DenseLayer):
         
         # self.H = H
         num_inputs = int(np.prod(incoming.output_shape[1:]))
-        self.H = np.float32(np.sqrt(6. / (num_inputs + num_units))/2.)
+        self.H = np.float32(np.sqrt(1.5/ (num_inputs + num_units)))
+        # print("H = "+str(self.H))
         
         if self.stochastic:
             self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
@@ -95,7 +113,7 @@ class DenseLayer(lasagne.layers.DenseLayer):
         # (deterministic == True) <-> test-time
         if not self.binary or (deterministic and self.stochastic):
             
-            activation = T.dot(input,self.W)
+            self.Wb = self.W
         
         else:
             # [-1,1] -> [0,1]
@@ -112,10 +130,108 @@ class DenseLayer(lasagne.layers.DenseLayer):
             # 0 or 1 -> -1 or 1
             self.Wb = T.cast(T.switch(self.Wb,self.H,-self.H), theano.config.floatX)
         
-            activation = T.dot(input,self.Wb)
+        activation = T.dot(input,self.Wb)
 
         if self.b is not None:
             activation = activation + self.b.dimshuffle('x', 0)
+        return self.nonlinearity(activation)
+
+class Conv2DLayer(lasagne.layers.Conv2DLayer):
+    
+    def __init__(self, incoming, num_filters, filter_size,
+        binary = True, stochastic = True, **kwargs):
+        
+        self.binary = binary
+        self.stochastic = stochastic
+
+        num_inputs = int(np.prod(filter_size)*incoming.output_shape[1])
+        # theoretically, I should divide num_units by the pool_shape
+        num_units = int(np.prod(filter_size)*num_filters)
+        self.H = np.float32(np.sqrt(1.5 / (num_inputs + num_units)))
+        # print("H = "+str(self.H))
+        # self.H = .05
+
+        if self.stochastic:
+            self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
+            
+        if self.binary:
+            super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs)   
+        
+        else:
+            super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size, **kwargs)    
+
+    def get_output_for(self, input, input_shape=None, deterministic=False, **kwargs):
+        # The optional input_shape argument is for when get_output_for is
+        # called directly with a different shape than self.input_shape.
+        
+        # print("deterministic = "+str(deterministic))
+        
+        if input_shape is None:
+            input_shape = self.input_shape
+        
+        # (deterministic == True) <-> test-time
+        if not self.binary or (deterministic and self.stochastic):
+            
+            self.Wb = self.W
+        
+        else:
+            # [-1,1] -> [0,1]
+            self.Wb = hard_sigmoid(self.W/self.H)
+            
+            # Stochastic BinaryConnect
+            if self.stochastic:
+                self.Wb = T.cast(self._srng.binomial(n=1, p=self.Wb, size=T.shape(self.Wb)), theano.config.floatX)
+
+            # Deterministic BinaryConnect (round to nearest)
+            else:
+                self.Wb = T.round(self.Wb)
+            
+            # 0 or 1 -> -1 or 1
+            self.Wb = T.cast(T.switch(self.Wb,self.H,-self.H), theano.config.floatX)
+        
+        if self.stride == (1, 1) and self.pad == 'same':
+            # simulate same convolution by cropping a full convolution
+            conved = self.convolution(input, self.Wb, subsample=self.stride,
+                                      image_shape=input_shape,
+                                      filter_shape=self.get_W_shape(),
+                                      border_mode='full')
+            shift_x = (self.filter_size[0] - 1) // 2
+            shift_y = (self.filter_size[1] - 1) // 2
+            conved = conved[:, :, shift_x:input.shape[2] + shift_x,
+                            shift_y:input.shape[3] + shift_y]
+        else:
+            # no padding needed, or explicit padding of input needed
+            if self.pad == 'full':
+                border_mode = 'full'
+                pad = [(0, 0), (0, 0)]
+            elif self.pad == 'same':
+                border_mode = 'valid'
+                pad = [(self.filter_size[0] // 2,
+                        (self.filter_size[0] - 1) // 2),
+                       (self.filter_size[1] // 2,
+                        (self.filter_size[1] - 1) // 2)]
+            else:
+                border_mode = 'valid'
+                pad = [(self.pad[0], self.pad[0]), (self.pad[1], self.pad[1])]
+            if pad != [(0, 0), (0, 0)]:
+                input = padding.pad(input, pad, batch_ndim=2)
+                input_shape = (input_shape[0], input_shape[1],
+                               None if input_shape[2] is None else
+                               input_shape[2] + pad[0][0] + pad[0][1],
+                               None if input_shape[3] is None else
+                               input_shape[3] + pad[1][0] + pad[1][1])
+            conved = self.convolution(input, self.Wb, subsample=self.stride,
+                                      image_shape=input_shape,
+                                      filter_shape=self.get_W_shape(),
+                                      border_mode=border_mode)
+
+        if self.b is None:
+            activation = conved
+        elif self.untie_biases:
+            activation = conved + self.b.dimshuffle('x', 0, 1, 2)
+        else:
+            activation = conved + self.b.dimshuffle('x', 0, 'x', 'x')
+
         return self.nonlinearity(activation)
         
 def train(train_fn,val_fn,

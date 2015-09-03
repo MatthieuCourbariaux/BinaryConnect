@@ -15,81 +15,61 @@
 # You should have received a copy of the GNU General Public License
 # along with BinaryConnect.  If not, see <http://www.gnu.org/licenses/>.
 
-import gzip
-import cPickle
-import numpy as np
-import os
-import os.path
+from __future__ import print_function
+
 import sys
+import os
 import time
 
-from trainer import Trainer
-from model import Network
-from layer import linear_layer, ReLU_layer, ReLU_conv_layer  
-# from layer import linear_layer, Maxout_layer, Maxout_conv_layer  
+import numpy as np
+np.random.seed(1234)  # for reproducibility
 
-# from pylearn2.datasets.mnist import MNIST
+# specifying the gpu to use
+# import theano.sandbox.cuda
+# theano.sandbox.cuda.use('gpu1') 
+import theano
+import theano.tensor as T
+
+import lasagne
+
+import cPickle as pickle
+import gzip
+
+import batch_norm
+import binary_connect
+
 from pylearn2.datasets.zca_dataset import ZCA_Dataset    
 # from pylearn2.datasets.svhn import SVHN
 from pylearn2.utils import serial
-   
-# MAIN
 
 if __name__ == "__main__":
     
-    rng = np.random.RandomState(1234)
-    
-    # data augmentation
-    zero_pad = 0
-    affine_transform_a = 0
-    affine_transform_b = 0
-    horizontal_flip = False
-    
-    # batch
-    # keep a factor of 10000 if possible
-    # 10000 = (2*5)^4
+    # BN parameters
     batch_size = 100
-    number_of_batches_on_gpu = 45000/batch_size
-    BN = True
-    BN_epsilon=1e-4 # for numerical stability
-    BN_fast_eval= True
-    dropout_hidden = 1.
-    shuffle_examples = True
-    shuffle_batches = False
-
-    # Termination criteria
-    n_epoch = 300
-    monitor_step = 2 
-    # core_path = "cnn_exp/" + str(sys.argv)
-    load_path = None    
-    # load_path = core_path + ".pkl"
-    save_path = None
-    # save_path = core_path + ".pkl"
-    # print save_path
+    # alpha is the exponential moving average factor
+    # alpha = .1 # for a minibatch of size 50
+    alpha = .2 # for a minibatch of size 100
+    # alpha = .33 # for a minibatch of size 200
+    epsilon = 1e-4
     
-    # LR 
-    LR = .3
-    LR_fin = .001
-    LR_decay = (LR_fin/LR)**(1./n_epoch)    
-    M= 0.
+    # Training parameters
+    num_epochs = 300
     
     # BinaryConnect
-    BinaryConnect = True
+    binary = True
     stochastic = True
+    # H = (1./(1<<4))/10
+    # H = 1./(1<<4)
+    # H = .316
+    # H = 1.
     
-    # Old hyperparameters
-    binary_training=False 
-    stochastic_training=False
-    binary_test=False
-    stochastic_test=False
-    if BinaryConnect == True:
-        binary_training=True      
-        if stochastic == True:   
-            stochastic_training=True  
-        else:
-            binary_test=True
+    # LR decay
+    LR_start = 3.
+    LR_fin = .01 
+    LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
+    # BTW, LR decay is good for the moving average...
     
-    print 'Loading the dataset' 
+    print('Loading CIFAR-10 dataset...')
     
     preprocessor = serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/preprocessor.pkl")
     train_set = ZCA_Dataset(
@@ -103,12 +83,12 @@ if __name__ == "__main__":
     test_set = ZCA_Dataset(
         preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/test.pkl"), 
         preprocessor = preprocessor)
-    
+        
     # bc01 format
     # print train_set.X.shape
-    train_set.X = train_set.X.reshape(45000,3,32,32)
-    valid_set.X = valid_set.X.reshape(5000,3,32,32)
-    test_set.X = test_set.X.reshape(10000,3,32,32)
+    train_set.X = train_set.X.reshape(-1,3,32,32)
+    valid_set.X = valid_set.X.reshape(-1,3,32,32)
+    test_set.X = test_set.X.reshape(-1,3,32,32)
     
     # flatten targets
     train_set.y = np.hstack(train_set.y)
@@ -124,175 +104,195 @@ if __name__ == "__main__":
     train_set.y = 2* train_set.y - 1.
     valid_set.y = 2* valid_set.y - 1.
     test_set.y = 2* test_set.y - 1.
-    
-    print 'Creating the model'
-    
-    class DeepCNN(Network):
 
-        def __init__(self, rng):
+    print('Building the CNN...') 
+    
+    # Prepare Theano variables for inputs and targets
+    input = T.tensor4('inputs')
+    target = T.matrix('targets')
+    LR = T.scalar('LR', dtype=theano.config.floatX)
 
-            Network.__init__(self, n_hidden_layer = 8, BN = BN)
-            
-            print "    C3 layer:"
+    cnn = lasagne.layers.InputLayer(
+            shape=(None, 3, 32, 32),
+            input_var=input)
+    
+    # 128C3-128C3-P2    
+    for k in range(2):
+    
+        cnn = binary_connect.Conv2DLayer(
+                cnn, 
+                binary=binary,
+                stochastic=stochastic,
+                # H=H,
+                num_filters=128, 
+                filter_size=(3, 3),
+                nonlinearity=lasagne.nonlinearities.identity)
+        
+        cnn = batch_norm.BatchNormLayer(
+                cnn,
+                epsilon=epsilon, 
+                alpha=alpha,
+                nonlinearity=lasagne.nonlinearities.rectify)
+    
+    cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
+    
+    # 256C2-256C2-P2
+    for k in range(2):
+    
+        cnn = binary_connect.Conv2DLayer(
+                cnn, 
+                binary=binary,
+                stochastic=stochastic,
+                # H=H,
+                num_filters=256, 
+                filter_size=(2, 2),
+                nonlinearity=lasagne.nonlinearities.identity)
+        
+        cnn = batch_norm.BatchNormLayer(
+                cnn,
+                epsilon=epsilon, 
+                alpha=alpha,
+                nonlinearity=lasagne.nonlinearities.rectify)
                 
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                filter_shape=(128, 3, 3, 3),
-                pool_shape=(1,1),
-                pool_stride=(1,1),
-                BN = BN,                     
-                BN_epsilon=BN_epsilon,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-            print "    C3 P2 layers:"
+    cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
+    
+    # 512C2-512C2-P2
+    for k in range(2):
+    
+        cnn = binary_connect.Conv2DLayer(
+                cnn, 
+                binary=binary,
+                stochastic=stochastic,
+                # H=H,
+                num_filters=512, 
+                filter_size=(2, 2),
+                nonlinearity=lasagne.nonlinearities.identity)
+        
+        cnn = batch_norm.BatchNormLayer(
+                cnn,
+                epsilon=epsilon, 
+                alpha=alpha,
+                nonlinearity=lasagne.nonlinearities.rectify)
                 
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                filter_shape=(128, 128, 3, 3),
-                pool_shape=(2,2),
-                pool_stride=(2,2),
-                BN = BN,                     
-                BN_epsilon=BN_epsilon,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-            print "    C2 layer:"
-                
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                filter_shape=(256, 128, 2, 2),
-                pool_shape=(1,1),
-                pool_stride=(1,1),
-                BN = BN,                     
-                BN_epsilon=BN_epsilon,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-            print "    C2 P2 layers:"
-            
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                filter_shape=(256, 256, 2, 2),
-                pool_shape=(2,2),
-                pool_stride=(2,2),
-                BN = BN,                     
-                BN_epsilon=BN_epsilon,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-            print "    C2 layer:"
-                
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                filter_shape=(512, 256, 2, 2),
-                pool_shape=(1,1),
-                pool_stride=(1,1),
-                BN = BN,                     
-                BN_epsilon=BN_epsilon,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-            print "    C2 P2 layers:"
-            
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                filter_shape=(512, 512, 2, 2),
-                pool_shape=(2,2),
-                pool_stride=(2,2),
-                BN = BN,                     
-                BN_epsilon=BN_epsilon,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-            print "    C2 layer:"
-                
-            self.layer.append(ReLU_conv_layer(
-                rng,
-                filter_shape=(1024, 512, 2, 2),
-                pool_shape=(1,1),
-                pool_stride=(1,1),
-                BN = BN,                     
-                BN_epsilon=BN_epsilon,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-            print "    FC layer:"
-            
-            self.layer.append(ReLU_layer(
-                    rng = rng, 
-                    n_inputs = 1024, 
-                    n_units = 1024, 
-                    BN = BN, 
-                    BN_epsilon=BN_epsilon, 
-                    dropout=dropout_hidden, 
-                    binary_training=binary_training, 
-                    stochastic_training=stochastic_training,
-                    binary_test=binary_test, 
-                    stochastic_test=stochastic_test
-            ))
-            
-            print "    L2 SVM layer:"
-            
-            self.layer.append(linear_layer(
-                rng = rng, 
-                n_inputs= 1024, 
-                n_units = 10, 
-                BN = BN,
-                BN_epsilon=BN_epsilon,
-                dropout = dropout_hidden,
-                binary_training=binary_training, 
-                stochastic_training=stochastic_training,
-                binary_test=binary_test, 
-                stochastic_test=stochastic_test
-            ))
-            
-    model = DeepCNN(rng = rng)
+    cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
     
-    print 'Creating the trainer'
+    # 1024C2-1024FC-10FC
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            # H=H,
+            num_filters=1024, 
+            filter_size=(2, 2),
+            nonlinearity=lasagne.nonlinearities.identity)
     
-    trainer = Trainer(rng = rng,
-        train_set = train_set, valid_set = valid_set, test_set = test_set,
-        model = model, load_path = load_path, save_path = save_path,
-        zero_pad=zero_pad,
-        affine_transform_a=affine_transform_a, # a is (more or less) the rotations
-        affine_transform_b=affine_transform_b, # b is the translations
-        horizontal_flip=horizontal_flip,
-        LR = LR, LR_decay = LR_decay, LR_fin = LR_fin,
-        M = M,
-        BN = BN, BN_fast_eval=BN_fast_eval,
-        batch_size = batch_size, number_of_batches_on_gpu = number_of_batches_on_gpu,
-        n_epoch = n_epoch, monitor_step = monitor_step,
-        shuffle_batches = shuffle_batches, shuffle_examples = shuffle_examples)
+    # print(cnn.output_shape)
     
-    print 'Building'
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
     
-    trainer.build()
+    cnn = binary_connect.DenseLayer(
+                cnn, 
+                binary=binary,
+                stochastic=stochastic,
+                # H=H,
+                nonlinearity=lasagne.nonlinearities.identity,
+                num_units=1024)      
+                  
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
     
-    print 'Training'
+    cnn = binary_connect.DenseLayer(
+                cnn, 
+                binary=binary,
+                stochastic=stochastic,
+                # H=H,
+                nonlinearity=lasagne.nonlinearities.identity,
+                num_units=10)      
+                  
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.identity)
+
+    train_output = lasagne.layers.get_output(cnn, deterministic=False)
     
-    start_time = time.clock()  
-    trainer.train()
-    end_time = time.clock()
-    print 'The training took %i seconds'%(end_time - start_time)
+    # squared hinge loss
+    loss = T.mean(T.sqr(T.maximum(0.,1.-target*train_output)))
+    
+    params = lasagne.layers.get_all_params(cnn, trainable=True)
+    
+    if binary:
+        grads = binary_connect.compute_grads(loss,cnn)
+        # updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=LR)
+        updates = lasagne.updates.sgd(loss_or_grads=grads, params=params, learning_rate=LR)
+        # updates = binary_connect.weights_clipping(updates,H) 
+        updates = binary_connect.weights_clipping(updates,cnn) 
+        # using 2H instead of H with stochastic yields about 20% relative worse results
+        
+    else:
+        # updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
+        updates = lasagne.updates.sgd(loss_or_grads=loss, params=params, learning_rate=LR)
+        # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
+
+    test_output = lasagne.layers.get_output(cnn, deterministic=True)
+    test_loss = T.mean(T.sqr(T.maximum(0.,1.-target*test_output)))
+    test_err = T.mean(T.neq(T.argmax(test_output, axis=1), T.argmax(target, axis=1)),dtype=theano.config.floatX)
+    
+    # Compile a function performing a training step on a mini-batch (by giving the updates dictionary) 
+    # and returning the corresponding training loss:
+    train_fn = theano.function([input, target, LR], loss, updates=updates)
+    # train_fn = theano.function([input, target], loss, updates=updates)
+
+    # Compile a second function computing the validation loss and accuracy:
+    val_fn = theano.function([input, target], [test_loss, test_err])
+
+    print('Training...')
+    
+    binary_connect.train(
+            train_fn,val_fn,
+            batch_size,
+            LR_start,LR_decay,
+            num_epochs,
+            train_set.X,train_set.y,
+            valid_set.X,valid_set.y,
+            test_set.X,test_set.y)
+    
+    # print('Phase 1:')
+    # binary_connect.train(
+            # train_fn,val_fn,
+            # batch_size,
+            # 1.,1.,
+            # 3,
+            # train_set.X,train_set.y,
+            # valid_set.X,valid_set.y,
+            # test_set.X,test_set.y)
+            
+    # print('Phase 2:')      
+    # binary_connect.train(
+            # train_fn,val_fn,
+            # 200,
+            # 0.,1.,
+            # 10,
+            # train_set.X,train_set.y,
+            # valid_set.X,valid_set.y,
+            # test_set.X,test_set.y)
+    
+    # print("display histogram")
+    
+    # W = lasagne.layers.get_all_layers(mlp)[2].W.get_value()
+    # print(W.shape)
+    
+    # histogram = np.histogram(W,bins=1000,range=(-1.1,1.1))
+    # np.savetxt(str(dropout_hidden)+str(binary)+str(stochastic)+str(H)+"_hist0.csv", histogram[0], delimiter=",")
+    # np.savetxt(str(dropout_hidden)+str(binary)+str(stochastic)+str(H)+"_hist1.csv", histogram[1], delimiter=",")
+    
+    # Optionally, you could now dump the network weights to a file like this:
+    # np.savez('model.npz', lasagne.layers.get_all_param_values(network))
