@@ -5,20 +5,13 @@
 * Python, Numpy, Scipy
 * Theano 0.6 (Bleeding edge version)
 * Pylearn2 0.1
-* Lasagne 0.1 (only for the "lasagne" branch)
-* PyTables (only for the SVHN dataset)
+* Lasagne 0.1
 * a fast GPU or a large amount of patience
 
 ## Motivations
 
 This repository allows to easily reproduce the experimental results reported in:
 "BinaryConnect: Training Deep Neural Networks with binary weights during propagations".
-
-## Branches
-
-There are two branches in this repository:
-* The "master" branch is a pure Theano version of BinaryConnect. The results reported in our paper were obtained using this branch.
-* The "lasagne" branch is a Lasagne (and thus Theano) version of BinaryConnect. The results are very similar to those of the "master" branch.
 
 ## MNIST
 
@@ -36,21 +29,8 @@ This python script trains a CNN on CIFAR-10 with the stochastic version of Binar
 It should run for about 5 hours on a Titan X GPU.
 The final test error should be around 12.20%.
 
-## SVHN
-    
-    export SVHN_LOCAL_PATH=/tmp/SVHN/
-    python svhn_preprocessing.py
-    
-This python script (taken from Pylearn2) computes a preprocessed version of the SVHN dataset in a temporary folder.
-
-    python svhn.py
-    
-This python script trains a CNN on SVHN with the stochastic version of BinaryConnect.
-It should run for about 15 hours on a Titan X GPU.
-The final test error should be around 2.66%.
-
 ## How to play with it
 
-The python scripts mnist.py, cifar10.py and svhn.py contain all the relevant hyperparameters.
+The python scripts mnist.py, cifar10.py contain all the relevant hyperparameters.
 It is very straightforward to modify them.
-layer.py contains the binarization function (binarize_weights).
+binary_connect.py contains the binarization function (in DenseLayer and Conv2DLayer classes).
