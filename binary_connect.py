@@ -79,6 +79,29 @@ def weights_clipping(updates,network):
 
 def hard_sigmoid(x):
     return T.clip((x+1.)/2.,0,1)
+
+def binarization(W,H,binary=True,deterministic=False,stochastic=False,srng=None):
+    
+    # (deterministic == True) <-> test-time
+    if not binary or (deterministic and stochastic):
+        Wb = W
+    
+    else:
+        # [-1,1] -> [0,1]
+        Wb = hard_sigmoid(W/H)
+        
+        # Stochastic BinaryConnect
+        if stochastic:
+            Wb = T.cast(srng.binomial(n=1, p=Wb, size=T.shape(Wb)), theano.config.floatX)
+
+        # Deterministic BinaryConnect (round to nearest)
+        else:
+            Wb = T.round(Wb)
+        
+        # 0 or 1 -> -1 or 1
+        Wb = T.cast(T.switch(Wb,H,-H), theano.config.floatX)
+    
+    return Wb
     
 class DenseLayer(lasagne.layers.DenseLayer):
     
@@ -88,53 +111,31 @@ class DenseLayer(lasagne.layers.DenseLayer):
         
         self.binary = binary
         self.stochastic = stochastic
-        
+
         # self.H = H
         num_inputs = int(np.prod(incoming.output_shape[1:]))
         self.H = np.float32(np.sqrt(1.5/ (num_inputs + num_units)))
         # print("H = "+str(self.H))
+
+        self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
         
-        if self.stochastic:
-            self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
-            
         if self.binary:
-            super(DenseLayer, self).__init__(incoming, num_units, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs)   
-        
+            super(DenseLayer, self).__init__(incoming, num_units, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs) 
+            
         else:
             super(DenseLayer, self).__init__(incoming, num_units, **kwargs)
         
     def get_output_for(self, input, deterministic=False, **kwargs):
-    
-        if input.ndim > 2:
-            # if the input has more than two dimensions, flatten it into a
-            # batch of feature vectors.
-            input = input.flatten(2)        
         
-        # (deterministic == True) <-> test-time
-        if not self.binary or (deterministic and self.stochastic):
+        self.Wb = binarization(self.W,self.H,self.binary,deterministic,self.stochastic,self._srng)
+        Wr = self.W
+        self.W = self.Wb
             
-            self.Wb = self.W
+        rvalue = super(DenseLayer, self).get_output_for(input, **kwargs)
         
-        else:
-            # [-1,1] -> [0,1]
-            self.Wb = hard_sigmoid(self.W/self.H)
-            
-            # Stochastic BinaryConnect
-            if self.stochastic:
-                self.Wb = T.cast(self._srng.binomial(n=1, p=self.Wb, size=T.shape(self.Wb)), theano.config.floatX)
-
-            # Deterministic BinaryConnect (round to nearest)
-            else:
-                self.Wb = T.round(self.Wb)
-            
-            # 0 or 1 -> -1 or 1
-            self.Wb = T.cast(T.switch(self.Wb,self.H,-self.H), theano.config.floatX)
+        self.W = Wr
         
-        activation = T.dot(input,self.Wb)
-
-        if self.b is not None:
-            activation = activation + self.b.dimshuffle('x', 0)
-        return self.nonlinearity(activation)
+        return rvalue
 
 class Conv2DLayer(lasagne.layers.Conv2DLayer):
     
@@ -151,88 +152,25 @@ class Conv2DLayer(lasagne.layers.Conv2DLayer):
         # print("H = "+str(self.H))
         # self.H = .05
 
-        if self.stochastic:
-            self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
+        self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
             
         if self.binary:
             super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs)   
         
         else:
             super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size, **kwargs)    
-
+    
     def get_output_for(self, input, input_shape=None, deterministic=False, **kwargs):
-        # The optional input_shape argument is for when get_output_for is
-        # called directly with a different shape than self.input_shape.
         
-        # print("deterministic = "+str(deterministic))
-        
-        if input_shape is None:
-            input_shape = self.input_shape
-        
-        # (deterministic == True) <-> test-time
-        if not self.binary or (deterministic and self.stochastic):
+        self.Wb = binarization(self.W,self.H,self.binary,deterministic,self.stochastic,self._srng)
+        Wr = self.W
+        self.W = self.Wb
             
-            self.Wb = self.W
+        rvalue = super(Conv2DLayer, self).get_output_for(input,input_shape, **kwargs)
         
-        else:
-            # [-1,1] -> [0,1]
-            self.Wb = hard_sigmoid(self.W/self.H)
-            
-            # Stochastic BinaryConnect
-            if self.stochastic:
-                self.Wb = T.cast(self._srng.binomial(n=1, p=self.Wb, size=T.shape(self.Wb)), theano.config.floatX)
-
-            # Deterministic BinaryConnect (round to nearest)
-            else:
-                self.Wb = T.round(self.Wb)
-            
-            # 0 or 1 -> -1 or 1
-            self.Wb = T.cast(T.switch(self.Wb,self.H,-self.H), theano.config.floatX)
+        self.W = Wr
         
-        if self.stride == (1, 1) and self.pad == 'same':
-            # simulate same convolution by cropping a full convolution
-            conved = self.convolution(input, self.Wb, subsample=self.stride,
-                                      image_shape=input_shape,
-                                      filter_shape=self.get_W_shape(),
-                                      border_mode='full')
-            shift_x = (self.filter_size[0] - 1) // 2
-            shift_y = (self.filter_size[1] - 1) // 2
-            conved = conved[:, :, shift_x:input.shape[2] + shift_x,
-                            shift_y:input.shape[3] + shift_y]
-        else:
-            # no padding needed, or explicit padding of input needed
-            if self.pad == 'full':
-                border_mode = 'full'
-                pad = [(0, 0), (0, 0)]
-            elif self.pad == 'same':
-                border_mode = 'valid'
-                pad = [(self.filter_size[0] // 2,
-                        (self.filter_size[0] - 1) // 2),
-                       (self.filter_size[1] // 2,
-                        (self.filter_size[1] - 1) // 2)]
-            else:
-                border_mode = 'valid'
-                pad = [(self.pad[0], self.pad[0]), (self.pad[1], self.pad[1])]
-            if pad != [(0, 0), (0, 0)]:
-                input = padding.pad(input, pad, batch_ndim=2)
-                input_shape = (input_shape[0], input_shape[1],
-                               None if input_shape[2] is None else
-                               input_shape[2] + pad[0][0] + pad[0][1],
-                               None if input_shape[3] is None else
-                               input_shape[3] + pad[1][0] + pad[1][1])
-            conved = self.convolution(input, self.Wb, subsample=self.stride,
-                                      image_shape=input_shape,
-                                      filter_shape=self.get_W_shape(),
-                                      border_mode=border_mode)
-
-        if self.b is None:
-            activation = conved
-        elif self.untie_biases:
-            activation = conved + self.b.dimshuffle('x', 0, 1, 2)
-        else:
-            activation = conved + self.b.dimshuffle('x', 0, 'x', 'x')
-
-        return self.nonlinearity(activation)
+        return rvalue
         
 def train(train_fn,val_fn,
             batch_size,

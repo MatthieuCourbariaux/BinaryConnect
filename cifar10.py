@@ -46,18 +46,24 @@ if __name__ == "__main__":
     
     # BN parameters
     batch_size = 100
+    print("batch_size = "+str(batch_size))
     # alpha is the exponential moving average factor
     # alpha = .1 # for a minibatch of size 50
     alpha = .2 # for a minibatch of size 100
+    print("alpha = "+str(alpha))
     # alpha = .33 # for a minibatch of size 200
     epsilon = 1e-4
+    print("epsilon = "+str(epsilon))
     
     # Training parameters
     num_epochs = 300
+    print("num_epochs = "+str(num_epochs))
     
-    # BinaryConnect
-    binary = True
-    stochastic = True
+    # BinaryConnect    
+    binary = False
+    print("binary = "+str(binary))
+    stochastic = False
+    print("stochastic = "+str(stochastic))
     # H = (1./(1<<4))/10
     # H = 1./(1<<4)
     # H = .316
@@ -65,9 +71,11 @@ if __name__ == "__main__":
     
     # LR decay
     LR_start = 3.
+    print("LR_start = "+str(LR_start))
     LR_fin = .01 
-    LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
-    # BTW, LR decay is good for the moving average...
+    print("LR_fin = "+str(LR_fin))
+    LR_decay = (LR_fin/LR_start)**(1./num_epochs)
+    # BTW, LR decay is good for the BN moving average...
     
     print('Loading CIFAR-10 dataset...')
     
@@ -117,64 +125,106 @@ if __name__ == "__main__":
             input_var=input)
     
     # 128C3-128C3-P2    
-    for k in range(2):
     
-        cnn = binary_connect.Conv2DLayer(
-                cnn, 
-                binary=binary,
-                stochastic=stochastic,
-                # H=H,
-                num_filters=128, 
-                filter_size=(3, 3),
-                nonlinearity=lasagne.nonlinearities.identity)
-        
-        cnn = batch_norm.BatchNormLayer(
-                cnn,
-                epsilon=epsilon, 
-                alpha=alpha,
-                nonlinearity=lasagne.nonlinearities.rectify)
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            # H=H,
+            num_filters=128, 
+            filter_size=(3, 3),
+            nonlinearity=lasagne.nonlinearities.identity)
+    
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
+    
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            # H=H,
+            num_filters=128, 
+            filter_size=(3, 3),
+            nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
+    
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
     
     # 256C2-256C2-P2
-    for k in range(2):
     
-        cnn = binary_connect.Conv2DLayer(
-                cnn, 
-                binary=binary,
-                stochastic=stochastic,
-                # H=H,
-                num_filters=256, 
-                filter_size=(2, 2),
-                nonlinearity=lasagne.nonlinearities.identity)
-        
-        cnn = batch_norm.BatchNormLayer(
-                cnn,
-                epsilon=epsilon, 
-                alpha=alpha,
-                nonlinearity=lasagne.nonlinearities.rectify)
-                
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            # H=H,
+            num_filters=256, 
+            filter_size=(2, 2),
+            nonlinearity=lasagne.nonlinearities.identity)
+    
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
+    
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            # H=H,
+            num_filters=256, 
+            filter_size=(2, 2),
+            nonlinearity=lasagne.nonlinearities.identity)
+    
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
+    
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
     
     # 512C2-512C2-P2
-    for k in range(2):
     
-        cnn = binary_connect.Conv2DLayer(
-                cnn, 
-                binary=binary,
-                stochastic=stochastic,
-                # H=H,
-                num_filters=512, 
-                filter_size=(2, 2),
-                nonlinearity=lasagne.nonlinearities.identity)
-        
-        cnn = batch_norm.BatchNormLayer(
-                cnn,
-                epsilon=epsilon, 
-                alpha=alpha,
-                nonlinearity=lasagne.nonlinearities.rectify)
-                
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            # H=H,
+            num_filters=512, 
+            filter_size=(2, 2),
+            nonlinearity=lasagne.nonlinearities.identity)
+
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
+    
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            # H=H,
+            num_filters=512, 
+            filter_size=(2, 2),
+            nonlinearity=lasagne.nonlinearities.identity)
+    
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
+    
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)    
     
     # 1024C2-1024FC-10FC
     cnn = binary_connect.Conv2DLayer(
@@ -264,26 +314,6 @@ if __name__ == "__main__":
             train_set.X,train_set.y,
             valid_set.X,valid_set.y,
             test_set.X,test_set.y)
-    
-    # print('Phase 1:')
-    # binary_connect.train(
-            # train_fn,val_fn,
-            # batch_size,
-            # 1.,1.,
-            # 3,
-            # train_set.X,train_set.y,
-            # valid_set.X,valid_set.y,
-            # test_set.X,test_set.y)
-            
-    # print('Phase 2:')      
-    # binary_connect.train(
-            # train_fn,val_fn,
-            # 200,
-            # 0.,1.,
-            # 10,
-            # train_set.X,train_set.y,
-            # valid_set.X,valid_set.y,
-            # test_set.X,test_set.y)
     
     # print("display histogram")
     

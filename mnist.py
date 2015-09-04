@@ -38,30 +38,43 @@ import gzip
 import batch_norm
 import binary_connect
 
+from pylearn2.datasets.mnist import MNIST
+from pylearn2.utils import serial
+
 if __name__ == "__main__":
     
     # BN parameters
     batch_size = 200
+    print("batch_size = "+str(batch_size))
     # alpha is the exponential moving average factor
     # alpha = .1 # for a minibatch of size 50
     # alpha = .2 # for a minibatch of size 100
     alpha = .33 # for a minibatch of size 200
+    print("alpha = "+str(alpha))
     epsilon = 1e-4
+    print("epsilon = "+str(epsilon))
     
     # MLP parameters
     num_units = 1024
+    print("num_units = "+str(num_units))
     n_hidden_layers = 3
+    print("n_hidden_layers = "+str(n_hidden_layers))
     
     # Training parameters
     num_epochs = 1000
+    print("num_epochs = "+str(num_epochs))
     
     # Dropout parameters
     dropout_in = 0.
+    print("dropout_in = "+str(dropout_in))
     dropout_hidden = 0.
+    print("dropout_hidden = "+str(dropout_hidden))
     
     # BinaryConnect
     binary = True
+    print("binary = "+str(binary))
     stochastic = True
+    print("stochastic = "+str(stochastic))
     # H = (1./(1<<4))/10
     # H = 1./(1<<4)
     # H = .316
@@ -69,54 +82,38 @@ if __name__ == "__main__":
     
     # LR decay
     LR_start = 3.
+    print("LR_start = "+str(LR_start))
     LR_fin = .1
+    print("LR_fin = "+str(LR_fin))
     LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
     # BTW, LR decay is good for the moving average...
     
     print('Loading MNIST dataset...')
-
-    # We'll then load and unpickle the file.
-    filename = "/data/lisa/data/mnist/mnist.pkl.gz"
-    with gzip.open(filename, 'rb') as f:
-        data = pickle.load(f)
-
-    # The MNIST dataset we have here consists of six numpy arrays:
-    # Inputs and targets for the training set, validation set and test set.
-    X_train, y_train = data[0]
-    X_val, y_val = data[1]
-    X_test, y_test = data[2]
-
-    # The inputs come as vectors, we reshape them to monochrome 2D images,
-    # according to the shape convention: (examples, channels, rows, columns)
-    X_train = X_train.reshape((-1, 1, 28, 28))
-    X_val = X_val.reshape((-1, 1, 28, 28))
-    X_test = X_test.reshape((-1, 1, 28, 28))
     
-    # without standardization .97%, 1.11%
-    # with standardization 1.06%, 1.34%
-    # standardize the dataset
-    # def standardize(X):
-        # X -= X.mean(axis=0)
-        # X /= (X.std(axis=0)+epsilon)
-        # return X
-    # X_train = standardize(X_train)
-    # X_val = standardize(X_val)
-    # X_test = standardize(X_test)
-
-    # flatten the targets
-    y_train = np.hstack(y_train)
-    y_val = np.hstack(y_val)
-    y_test = np.hstack(y_test)
-
+    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
+    valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
+    test_set = MNIST(which_set= 'test', center = True)
+    
+    # bc01 format
+    # print train_set.X.shape
+    train_set.X = train_set.X.reshape(-1, 1, 28, 28)
+    valid_set.X = valid_set.X.reshape(-1, 1, 28, 28)
+    test_set.X = test_set.X.reshape(-1, 1, 28, 28)
+    
+    # flatten targets
+    train_set.y = np.hstack(train_set.y)
+    valid_set.y = np.hstack(valid_set.y)
+    test_set.y = np.hstack(test_set.y)
+    
     # Onehot the targets
-    y_train = np.float32(np.eye(10)[y_train])    
-    y_val = np.float32(np.eye(10)[y_val])
-    y_test = np.float32(np.eye(10)[y_test])
-
-    # prepare targets for hinge loss
-    y_train = 2* y_train - 1.
-    y_val = 2* y_val - 1.
-    y_test = 2* y_test - 1.
+    train_set.y = np.float32(np.eye(10)[train_set.y])    
+    valid_set.y = np.float32(np.eye(10)[valid_set.y])
+    test_set.y = np.float32(np.eye(10)[test_set.y])
+    
+    # for hinge loss
+    train_set.y = 2* train_set.y - 1.
+    valid_set.y = 2* valid_set.y - 1.
+    test_set.y = 2* test_set.y - 1.
 
     print('Building the MLP...') 
     
@@ -206,9 +203,9 @@ if __name__ == "__main__":
             batch_size,
             LR_start,LR_decay,
             num_epochs,
-            X_train,y_train,
-            X_val,y_val,
-            X_test,y_test)
+            train_set.X,train_set.y,
+            valid_set.X,valid_set.y,
+            test_set.X,test_set.y)
     
     # print("display histogram")
     

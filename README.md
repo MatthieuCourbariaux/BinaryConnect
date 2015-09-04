@@ -33,4 +33,4 @@ The final test error should be around 12.20%.
 
 The python scripts mnist.py and cifar10.py contain all the relevant hyperparameters.
 It is very straightforward to modify them.
-binary_connect.py contains the binarization function (see DenseLayer and Conv2DLayer classes).
+binary_connect.py contains the binarization function (called binarization).
