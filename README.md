@@ -5,6 +5,7 @@
 * Python, Numpy, Scipy
 * Theano 0.6 (Bleeding edge version)
 * Pylearn2 0.1
+* Lasagne 0.1 (only for the "lasagne" branch)
 * PyTables (only for the SVHN dataset)
 * a fast GPU or a large amount of patience
 
@@ -12,6 +13,12 @@
 
 This repository allows to easily reproduce the experimental results reported in:
 "BinaryConnect: Training Deep Neural Networks with binary weights during propagations".
+
+## Branches
+
+There are two branches in this repository:
+* The "master" branch is a pure Theano version of BinaryConnect. The results reported in our paper were obtained using this branch.
+* The "lasagne" branch is a Lasagne (and thus Theano) version of BinaryConnect. The results are very similar to those of the "master" branch.
 
 ## MNIST
 
