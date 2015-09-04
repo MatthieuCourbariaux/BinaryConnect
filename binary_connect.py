@@ -85,7 +85,6 @@ def binarization(W,H,binary=True,deterministic=False,stochastic=False,srng=None)
     # (deterministic == True) <-> test-time
     if not binary or (deterministic and stochastic):
         Wb = W
-        
         # print("not binary")
     
     else:
