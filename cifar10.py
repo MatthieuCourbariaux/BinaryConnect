@@ -60,9 +60,9 @@ if __name__ == "__main__":
     print("num_epochs = "+str(num_epochs))
     
     # BinaryConnect    
-    binary = False
+    binary = True
     print("binary = "+str(binary))
-    stochastic = False
+    stochastic = True
     print("stochastic = "+str(stochastic))
     # H = (1./(1<<4))/10
     # H = 1./(1<<4)
