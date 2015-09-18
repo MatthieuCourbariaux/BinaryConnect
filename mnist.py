@@ -41,6 +41,8 @@ import binary_connect
 from pylearn2.datasets.mnist import MNIST
 from pylearn2.utils import serial
 
+from collections import OrderedDict
+
 if __name__ == "__main__":
     
     # BN parameters
@@ -61,8 +63,19 @@ if __name__ == "__main__":
     print("n_hidden_layers = "+str(n_hidden_layers))
     
     # Training parameters
-    num_epochs = 1000
+    num_epochs = 50
     print("num_epochs = "+str(num_epochs))
+    
+    # LR
+    LR_start = 1.
+    # LR_start = .001
+    print("LR_start = "+str(LR_start))
+    # LR_fin = LR_start/30.
+    LR_fin = LR_start/1000.
+    # LR_fin = LR_start/1.
+    print("LR_fin = "+str(LR_fin))
+    LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
+    # BTW, LR decay is good for the moving average...
     
     # Dropout parameters
     dropout_in = 0.
@@ -78,15 +91,14 @@ if __name__ == "__main__":
     # H = (1./(1<<4))/10
     # H = 1./(1<<4)
     # H = .316
-    # H = 1.
-    
-    # LR decay
-    LR_start = 3.
-    print("LR_start = "+str(LR_start))
-    LR_fin = .1
-    print("LR_fin = "+str(LR_fin))
-    LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
-    # BTW, LR decay is good for the moving average...
+    H = 1.
+    print("H = "+str(H))
+    # 80000 = 50* 1/(.025**2)
+    # 2000 = 50* 1/.025
+    W_LR_scale = 80000.
+    # W_LR_scale = 1000.
+    # W_LR_scale = 1.
+    print("W_LR_scale = "+str(W_LR_scale))
     
     print('Loading MNIST dataset...')
     
@@ -136,7 +148,7 @@ if __name__ == "__main__":
                 mlp, 
                 binary=binary,
                 stochastic=stochastic,
-                # H=H,
+                H=H,
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=num_units)                  
         
@@ -154,7 +166,7 @@ if __name__ == "__main__":
                 mlp, 
                 binary=binary,
                 stochastic=stochastic,
-                # H=H,
+                H=H,
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=10)      
                   
@@ -169,20 +181,24 @@ if __name__ == "__main__":
     # squared hinge loss
     loss = T.mean(T.sqr(T.maximum(0.,1.-target*train_output)))
     
-    params = lasagne.layers.get_all_params(mlp, trainable=True)
-    
     if binary:
-        grads = binary_connect.compute_grads(loss,mlp)
-        # updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=LR)
-        updates = lasagne.updates.sgd(loss_or_grads=grads, params=params, learning_rate=LR)
-        # updates = binary_connect.weights_clipping(updates,H) 
-        updates = binary_connect.weights_clipping(updates,mlp) 
+        
+        # W updates
+        W = lasagne.layers.get_all_params(mlp, binary=True)
+        W_grads = binary_connect.compute_grads(loss,mlp)
+        updates = lasagne.updates.nesterov_momentum(loss_or_grads=W_grads, params=W, learning_rate=W_LR_scale*LR)
+        updates = binary_connect.clipping(updates,H)
         # using 2H instead of H with stochastic yields about 20% relative worse results
         
-    else:
+        # other parameters updates
+        params = lasagne.layers.get_all_params(mlp, trainable=True, binary=False)
+        updates = OrderedDict(updates.items() + lasagne.updates.nesterov_momentum(loss_or_grads=loss, params=params, learning_rate=LR).items())
         # updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
-        updates = lasagne.updates.sgd(loss_or_grads=loss, params=params, learning_rate=LR)
-        # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
+        
+    else:
+        params = lasagne.layers.get_all_params(mlp, trainable=True)
+        updates = lasagne.updates.nesterov_momentum(loss_or_grads=loss, params=params, learning_rate=LR)
+        # updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
 
     test_output = lasagne.layers.get_output(mlp, deterministic=True)
     test_loss = T.mean(T.sqr(T.maximum(0.,1.-target*test_output)))

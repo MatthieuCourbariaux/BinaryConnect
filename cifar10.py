@@ -42,6 +42,8 @@ from pylearn2.datasets.zca_dataset import ZCA_Dataset
 # from pylearn2.datasets.svhn import SVHN
 from pylearn2.utils import serial
 
+from collections import OrderedDict
+
 if __name__ == "__main__":
     
     # BN parameters
@@ -56,7 +58,7 @@ if __name__ == "__main__":
     print("epsilon = "+str(epsilon))
     
     # Training parameters
-    num_epochs = 300
+    num_epochs = 500
     print("num_epochs = "+str(num_epochs))
     
     # BinaryConnect    
@@ -67,15 +69,31 @@ if __name__ == "__main__":
     # H = (1./(1<<4))/10
     # H = 1./(1<<4)
     # H = .316
-    # H = 1.
+    # H = "Glorot"
+    H = 1.
+    print("H = "+str(H))
+    # W_size = .025
+    # W_LR_scale = 1./(W_size**2)    
+    # W_LR_scale = 1./W_size    
+    # W_LR_scale = 1.    
+    W_LR_scale = "Glorot"    
+    print("W_LR_scale = "+str(W_LR_scale))
     
     # LR decay
-    LR_start = 3.
+    # LR_start = .03  # tuned for adam 
+    # LR_start = 1. # same error with 3. (with nesterov_momentum)
+    LR_start = 0.003
     print("LR_start = "+str(LR_start))
-    LR_fin = .01 
+    # LR_fin = .00003 # tuned for adam
+    # LR_fin = .01 # never improves below .015 (with nesterov_momentum)
+    LR_fin = 0.000003
     print("LR_fin = "+str(LR_fin))
     LR_decay = (LR_fin/LR_start)**(1./num_epochs)
+    print("LR_decay = "+str(LR_decay))
     # BTW, LR decay is good for the BN moving average...
+    
+    train_set_size = 45000
+    print("train_set_size = "+str(train_set_size))
     
     print('Loading CIFAR-10 dataset...')
     
@@ -83,7 +101,7 @@ if __name__ == "__main__":
     train_set = ZCA_Dataset(
         preprocessed_dataset=serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
         preprocessor = preprocessor,
-        start=0, stop = 45000)
+        start=0, stop = train_set_size)
     valid_set = ZCA_Dataset(
         preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
         preprocessor = preprocessor,
@@ -130,7 +148,8 @@ if __name__ == "__main__":
             cnn, 
             binary=binary,
             stochastic=stochastic,
-            # H=H,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=128, 
             filter_size=(3, 3),
             nonlinearity=lasagne.nonlinearities.identity)
@@ -145,7 +164,8 @@ if __name__ == "__main__":
             cnn, 
             binary=binary,
             stochastic=stochastic,
-            # H=H,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=128, 
             filter_size=(3, 3),
             nonlinearity=lasagne.nonlinearities.identity)
@@ -164,7 +184,8 @@ if __name__ == "__main__":
             cnn, 
             binary=binary,
             stochastic=stochastic,
-            # H=H,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=256, 
             filter_size=(2, 2),
             nonlinearity=lasagne.nonlinearities.identity)
@@ -179,7 +200,8 @@ if __name__ == "__main__":
             cnn, 
             binary=binary,
             stochastic=stochastic,
-            # H=H,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=256, 
             filter_size=(2, 2),
             nonlinearity=lasagne.nonlinearities.identity)
@@ -198,7 +220,8 @@ if __name__ == "__main__":
             cnn, 
             binary=binary,
             stochastic=stochastic,
-            # H=H,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=512, 
             filter_size=(2, 2),
             nonlinearity=lasagne.nonlinearities.identity)
@@ -213,7 +236,8 @@ if __name__ == "__main__":
             cnn, 
             binary=binary,
             stochastic=stochastic,
-            # H=H,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=512, 
             filter_size=(2, 2),
             nonlinearity=lasagne.nonlinearities.identity)
@@ -231,7 +255,8 @@ if __name__ == "__main__":
             cnn, 
             binary=binary,
             stochastic=stochastic,
-            # H=H,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=1024, 
             filter_size=(2, 2),
             nonlinearity=lasagne.nonlinearities.identity)
@@ -248,7 +273,8 @@ if __name__ == "__main__":
                 cnn, 
                 binary=binary,
                 stochastic=stochastic,
-                # H=H,
+                H=H,
+                W_LR_scale=W_LR_scale,
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=1024)      
                   
@@ -262,7 +288,8 @@ if __name__ == "__main__":
                 cnn, 
                 binary=binary,
                 stochastic=stochastic,
-                # H=H,
+                H=H,
+                W_LR_scale=W_LR_scale,
                 nonlinearity=lasagne.nonlinearities.identity,
                 num_units=10)      
                   
@@ -277,20 +304,25 @@ if __name__ == "__main__":
     # squared hinge loss
     loss = T.mean(T.sqr(T.maximum(0.,1.-target*train_output)))
     
-    params = lasagne.layers.get_all_params(cnn, trainable=True)
-    
     if binary:
-        grads = binary_connect.compute_grads(loss,cnn)
-        # updates = lasagne.updates.adam(loss_or_grads=grads, params=params, learning_rate=LR)
-        updates = lasagne.updates.sgd(loss_or_grads=grads, params=params, learning_rate=LR)
-        # updates = binary_connect.weights_clipping(updates,H) 
-        updates = binary_connect.weights_clipping(updates,cnn) 
+        
+        # W updates
+        W = lasagne.layers.get_all_params(cnn, binary=True)
+        W_grads = binary_connect.compute_grads(loss,cnn)
+        updates = lasagne.updates.adam(loss_or_grads=W_grads, params=W, learning_rate=LR)
+        updates = binary_connect.clipping_scaling(updates,cnn)
+        # updates = binary_connect.clipping(updates,H)
         # using 2H instead of H with stochastic yields about 20% relative worse results
         
-    else:
+        # other parameters updates
+        params = lasagne.layers.get_all_params(cnn, trainable=True, binary=False)
+        updates = OrderedDict(updates.items() + lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR).items())
         # updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
-        updates = lasagne.updates.sgd(loss_or_grads=loss, params=params, learning_rate=LR)
-        # updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
+        
+    else:
+        params = lasagne.layers.get_all_params(cnn, trainable=True)
+        updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
+        # updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
 
     test_output = lasagne.layers.get_output(cnn, deterministic=True)
     test_loss = T.mean(T.sqr(T.maximum(0.,1.-target*test_output)))

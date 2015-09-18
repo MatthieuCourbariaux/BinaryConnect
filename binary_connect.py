@@ -38,42 +38,49 @@ def compute_grads(loss,network):
     
     for layer in layers:
     
-        params = layer.get_params(trainable=True)
-        
-        for param in params:
-            if param.name == "W":
-                # print(param.name)
-                grads.append(theano.grad(loss, wrt=layer.Wb))
-            else:
-                # print("here")
-                grads.append(theano.grad(loss, wrt=param))
+        params = layer.get_params(binary=True)
+        if params:
+            # print(params[0].name)
+            grads.append(theano.grad(loss, wrt=layer.Wb))
                 
     return grads
 
-def weights_clipping(updates,network):
+def clipping_scaling(updates,network):
     
     layers = lasagne.layers.get_all_layers(network)
     updates = OrderedDict(updates)
     
     for layer in layers:
     
-        params = layer.get_params(trainable=True)
-        
+        params = layer.get_params(binary=True)
         for param in params:
-            if param.name == "W":
-                # print("K")
-                updates[param] = T.clip(updates[param], -layer.H, layer.H)           
+            print("W_LR_scale = "+str(layer.W_LR_scale))
+            print("H = "+str(layer.H))
+            updates[param] = param + layer.W_LR_scale*(updates[param] - param)
+            updates[param] = T.clip(updates[param], -layer.H,layer.H)     
 
     return updates
     
-# def weights_clipping(updates, H):
+# def clipping(updates,network):
+    
+    # layers = lasagne.layers.get_all_layers(network)
+    # updates = OrderedDict(updates)
+    
+    # for layer in layers:
+    
+        # params = layer.get_params(binary=True)
+        # for param in params:
+            # updates[param] = T.clip(updates[param], -layer.H, layer.H)     
+
+    # return updates
+    
+# def clipping(updates, H):
     
     # params = updates.keys()
     # updates = OrderedDict(updates)
 
-    # for param in params:        
-        # if param.name == "W":            
-            # updates[param] = T.clip(updates[param], -H, H)
+    # for param in params:
+        # updates[param] = T.clip(updates[param], -H, H)
 
     # return updates
 
@@ -111,21 +118,29 @@ def binarization(W,H,binary=True,deterministic=False,stochastic=False,srng=None)
 class DenseLayer(lasagne.layers.DenseLayer):
     
     def __init__(self, incoming, num_units, 
-        # binary = True, stochastic = True, H=1., **kwargs):
-        binary = True, stochastic = True, **kwargs):
+        binary = True, stochastic = True, H=1.,W_LR_scale="Glorot", **kwargs):
+        # binary = True, stochastic = True, **kwargs):
         
         self.binary = binary
         self.stochastic = stochastic
-
-        # self.H = H
-        num_inputs = int(np.prod(incoming.output_shape[1:]))
-        self.H = np.float32(np.sqrt(1.5/ (num_inputs + num_units)))
-        # print("H = "+str(self.H))
+        
+        self.H = H
+        if H == "Glorot":
+            num_inputs = int(np.prod(incoming.output_shape[1:]))
+            self.H = np.float32(np.sqrt(1.5/ (num_inputs + num_units)))
+            # print("H = "+str(self.H))
+            
+        self.W_LR_scale = W_LR_scale
+        if W_LR_scale == "Glorot":
+            num_inputs = int(np.prod(incoming.output_shape[1:]))
+            self.W_LR_scale = np.float32(1./np.sqrt(1.5/ (num_inputs + num_units)))
 
         self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
         
         if self.binary:
-            super(DenseLayer, self).__init__(incoming, num_units, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs) 
+            super(DenseLayer, self).__init__(incoming, num_units, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs)
+            # add the binary tag to weights            
+            self.params[self.W]=set(['binary'])
             
         else:
             super(DenseLayer, self).__init__(incoming, num_units, **kwargs)
@@ -145,23 +160,32 @@ class DenseLayer(lasagne.layers.DenseLayer):
 class Conv2DLayer(lasagne.layers.Conv2DLayer):
     
     def __init__(self, incoming, num_filters, filter_size,
-        binary = True, stochastic = True, **kwargs):
+        binary = True, stochastic = True, H=1.,W_LR_scale="Glorot", **kwargs):
+        # binary = True, stochastic = True, **kwargs):
         
         self.binary = binary
         self.stochastic = stochastic
-
-        num_inputs = int(np.prod(filter_size)*incoming.output_shape[1])
-        # theoretically, I should divide num_units by the pool_shape
-        num_units = int(np.prod(filter_size)*num_filters)
-        self.H = np.float32(np.sqrt(1.5 / (num_inputs + num_units)))
-        # print("H = "+str(self.H))
-        # self.H = .05
-
+        
+        self.H = H
+        if H == "Glorot":
+            num_inputs = int(np.prod(filter_size)*incoming.output_shape[1])
+            num_units = int(np.prod(filter_size)*num_filters) # theoretically, I should divide num_units by the pool_shape
+            self.H = np.float32(np.sqrt(1.5 / (num_inputs + num_units)))
+            # print("H = "+str(self.H))
+        
+        self.W_LR_scale = W_LR_scale
+        if W_LR_scale == "Glorot":
+            num_inputs = int(np.prod(filter_size)*incoming.output_shape[1])
+            num_units = int(np.prod(filter_size)*num_filters) # theoretically, I should divide num_units by the pool_shape
+            self.W_LR_scale = np.float32(1./np.sqrt(1.5 / (num_inputs + num_units)))
+            # print("W_LR_scale = "+str(self.W_LR_scale))
+            
         self._srng = RandomStreams(lasagne.random.get_rng().randint(1, 2147462579))
             
         if self.binary:
             super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size, W=lasagne.init.Uniform((-self.H,self.H)), **kwargs)   
-        
+            # add the binary tag to weights            
+            self.params[self.W]=set(['binary'])
         else:
             super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size, **kwargs)    
     
@@ -242,7 +266,6 @@ def train(train_fn,val_fn,
         
         train_loss = train_epoch(X_train,y_train,LR)
         X_train,y_train = shuffle(X_train,y_train)
-        LR *= LR_decay
         
         val_err, val_loss = val_epoch(X_val,y_val)
         
@@ -253,7 +276,7 @@ def train(train_fn,val_fn,
             best_epoch = epoch+1
             
             test_err, test_loss = val_epoch(X_test,y_test)
-
+        
         epoch_duration = time.time() - start_time
         
         # Then we print the results for this epoch:
@@ -266,3 +289,5 @@ def train(train_fn,val_fn,
         print("  best validation error rate:    "+str(best_val_err)+"%")
         print("  test loss:                     "+str(test_loss))
         print("  test error rate:               "+str(test_err)+"%") 
+        
+        LR *= LR_decay
