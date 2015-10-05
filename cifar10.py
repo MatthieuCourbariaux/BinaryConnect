@@ -47,11 +47,11 @@ from collections import OrderedDict
 if __name__ == "__main__":
     
     # BN parameters
-    batch_size = 100
+    batch_size = 50
     print("batch_size = "+str(batch_size))
     # alpha is the exponential moving average factor
     # alpha = .1 # for a minibatch of size 50
-    alpha = .2 # for a minibatch of size 100
+    alpha = .1 # for a minibatch of size 100
     print("alpha = "+str(alpha))
     # alpha = .33 # for a minibatch of size 200
     epsilon = 1e-4
@@ -79,14 +79,10 @@ if __name__ == "__main__":
     W_LR_scale = "Glorot"    
     print("W_LR_scale = "+str(W_LR_scale))
     
-    # LR decay
-    # LR_start = .03  # tuned for adam 
-    # LR_start = 1. # same error with 3. (with nesterov_momentum)
+    # LR decay 
     LR_start = 0.003
     print("LR_start = "+str(LR_start))
-    # LR_fin = .00003 # tuned for adam
-    # LR_fin = .01 # never improves below .015 (with nesterov_momentum)
-    LR_fin = 0.000003
+    LR_fin = 0.000002
     print("LR_fin = "+str(LR_fin))
     LR_decay = (LR_fin/LR_start)**(1./num_epochs)
     print("LR_decay = "+str(LR_decay))
@@ -142,8 +138,7 @@ if __name__ == "__main__":
             shape=(None, 3, 32, 32),
             input_var=input)
     
-    # 128C3-128C3-P2    
-    
+    # 128C3-128C3-P2             
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
@@ -152,14 +147,15 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=128, 
             filter_size=(3, 3),
+            pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = batch_norm.BatchNormLayer(
             cnn,
             epsilon=epsilon, 
             alpha=alpha,
-            nonlinearity=lasagne.nonlinearities.rectify)
-    
+            nonlinearity=lasagne.nonlinearities.rectify) 
+            
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
@@ -168,6 +164,7 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=128, 
             filter_size=(3, 3),
+            pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
@@ -177,9 +174,8 @@ if __name__ == "__main__":
             epsilon=epsilon, 
             alpha=alpha,
             nonlinearity=lasagne.nonlinearities.rectify)
-    
-    # 256C2-256C2-P2
-    
+            
+    # 256C3-256C3-P2             
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
@@ -187,7 +183,8 @@ if __name__ == "__main__":
             H=H,
             W_LR_scale=W_LR_scale,
             num_filters=256, 
-            filter_size=(2, 2),
+            filter_size=(3, 3),
+            pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = batch_norm.BatchNormLayer(
@@ -195,7 +192,7 @@ if __name__ == "__main__":
             epsilon=epsilon, 
             alpha=alpha,
             nonlinearity=lasagne.nonlinearities.rectify)
-    
+            
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
@@ -203,7 +200,8 @@ if __name__ == "__main__":
             H=H,
             W_LR_scale=W_LR_scale,
             num_filters=256, 
-            filter_size=(2, 2),
+            filter_size=(3, 3),
+            pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
@@ -213,9 +211,8 @@ if __name__ == "__main__":
             epsilon=epsilon, 
             alpha=alpha,
             nonlinearity=lasagne.nonlinearities.rectify)
-    
-    # 512C2-512C2-P2
-    
+            
+    # 512C3-512C3-P2              
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
@@ -223,15 +220,16 @@ if __name__ == "__main__":
             H=H,
             W_LR_scale=W_LR_scale,
             num_filters=512, 
-            filter_size=(2, 2),
+            filter_size=(3, 3),
+            pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
-
+    
     cnn = batch_norm.BatchNormLayer(
             cnn,
             epsilon=epsilon, 
             alpha=alpha,
             nonlinearity=lasagne.nonlinearities.rectify)
-    
+                  
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
@@ -239,7 +237,8 @@ if __name__ == "__main__":
             H=H,
             W_LR_scale=W_LR_scale,
             num_filters=512, 
-            filter_size=(2, 2),
+            filter_size=(3, 3),
+            pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
@@ -248,27 +247,26 @@ if __name__ == "__main__":
             cnn,
             epsilon=epsilon, 
             alpha=alpha,
-            nonlinearity=lasagne.nonlinearities.rectify)    
-    
-    # 1024C2-1024FC-10FC
-    cnn = binary_connect.Conv2DLayer(
-            cnn, 
-            binary=binary,
-            stochastic=stochastic,
-            H=H,
-            W_LR_scale=W_LR_scale,
-            num_filters=1024, 
-            filter_size=(2, 2),
-            nonlinearity=lasagne.nonlinearities.identity)
+            nonlinearity=lasagne.nonlinearities.rectify)
     
     # print(cnn.output_shape)
     
+    # 1024FP-1024FP-10FP            
+    cnn = binary_connect.DenseLayer(
+                cnn, 
+                binary=binary,
+                stochastic=stochastic,
+                H=H,
+                W_LR_scale=W_LR_scale,
+                nonlinearity=lasagne.nonlinearities.identity,
+                num_units=1024)      
+                  
     cnn = batch_norm.BatchNormLayer(
             cnn,
             epsilon=epsilon, 
             alpha=alpha,
             nonlinearity=lasagne.nonlinearities.rectify)
-    
+            
     cnn = binary_connect.DenseLayer(
                 cnn, 
                 binary=binary,
