@@ -19,7 +19,8 @@ This repository allows to easily reproduce the experimental results reported in 
     
 This python script trains an MLP on MNIST with the stochastic version of BinaryConnect.
 It should run for about 30 minutes on a GTX 680 GPU.
-The final test error should be around 1.15% (not exactly the same setup as in the paper).
+The final test error should be around 1.15%.
+Please note that this is NOT the experiment reported in the paper (which is in the "master" branch of the repository).
 
 ## CIFAR-10
 
