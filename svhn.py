@@ -37,15 +37,15 @@ import gzip
 
 import batch_norm
 import binary_connect
-
-from pylearn2.datasets.zca_dataset import ZCA_Dataset    
+   
+from pylearn2.datasets.svhn import SVHN
 from pylearn2.utils import serial
 
 from collections import OrderedDict
 
 if __name__ == "__main__":
     
-    # BN parameters
+    # Batch Normalization parameters
     batch_size = 50
     print("batch_size = "+str(batch_size))
     # alpha is the exponential moving average factor
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     print("epsilon = "+str(epsilon))
     
     # Training parameters
-    num_epochs = 500
+    num_epochs = 200
     print("num_epochs = "+str(num_epochs))
     
     # BinaryConnect    
@@ -72,52 +72,41 @@ if __name__ == "__main__":
     print("W_LR_scale = "+str(W_LR_scale))
     
     # Decaying LR 
-    LR_start = 0.003
+    LR_start = 0.01
     print("LR_start = "+str(LR_start))
-    LR_fin = 0.000002
+    LR_fin = 0.000003
     print("LR_fin = "+str(LR_fin))
     LR_decay = (LR_fin/LR_start)**(1./num_epochs)
     print("LR_decay = "+str(LR_decay))
     # BTW, LR decay might good for the BN moving average...
     
-    train_set_size = 45000
-    print("train_set_size = "+str(train_set_size))
+    print('Loading SVHN dataset')
     
-    print('Loading CIFAR-10 dataset...')
+    train_set = SVHN(
+            which_set= 'splitted_train',
+            path= "${SVHN_LOCAL_PATH}",
+            axes= ['b', 'c', 0, 1])
+     
+    valid_set = SVHN(
+        which_set= 'valid',
+        path= "${SVHN_LOCAL_PATH}",
+        axes= ['b', 'c', 0, 1])
     
-    preprocessor = serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/preprocessor.pkl")
-    train_set = ZCA_Dataset(
-        preprocessed_dataset=serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
-        preprocessor = preprocessor,
-        start=0, stop = train_set_size)
-    valid_set = ZCA_Dataset(
-        preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/train.pkl"), 
-        preprocessor = preprocessor,
-        start=45000, stop = 50000)  
-    test_set = ZCA_Dataset(
-        preprocessed_dataset= serial.load("${PYLEARN2_DATA_PATH}/cifar10/pylearn2_gcn_whitened/test.pkl"), 
-        preprocessor = preprocessor)
-        
+    test_set = SVHN(
+        which_set= 'test',
+        path= "${SVHN_LOCAL_PATH}",
+        axes= ['b', 'c', 0, 1])
+    
     # bc01 format
     # print train_set.X.shape
-    train_set.X = train_set.X.reshape(-1,3,32,32)
-    valid_set.X = valid_set.X.reshape(-1,3,32,32)
-    test_set.X = test_set.X.reshape(-1,3,32,32)
+    train_set.X = np.reshape(train_set.X,(-1,3,32,32))
+    valid_set.X = np.reshape(valid_set.X,(-1,3,32,32))
+    test_set.X = np.reshape(test_set.X,(-1,3,32,32))
     
-    # flatten targets
-    train_set.y = np.hstack(train_set.y)
-    valid_set.y = np.hstack(valid_set.y)
-    test_set.y = np.hstack(test_set.y)
-    
-    # Onehot the targets
-    train_set.y = np.float32(np.eye(10)[train_set.y])    
-    valid_set.y = np.float32(np.eye(10)[valid_set.y])
-    test_set.y = np.float32(np.eye(10)[test_set.y])
-    
-    # for hinge loss
-    train_set.y = 2* train_set.y - 1.
-    valid_set.y = 2* valid_set.y - 1.
-    test_set.y = 2* test_set.y - 1.
+    # for hinge loss (targets are already onehot)
+    train_set.y = np.subtract(np.multiply(2,train_set.y),1.)
+    valid_set.y = np.subtract(np.multiply(2,valid_set.y),1.)
+    test_set.y = np.subtract(np.multiply(2,test_set.y),1.)
 
     print('Building the CNN...') 
     
@@ -130,14 +119,14 @@ if __name__ == "__main__":
             shape=(None, 3, 32, 32),
             input_var=input)
     
-    # 128C3-128C3-P2             
+    # 64C3-64C3-P2             
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
             stochastic=stochastic,
             H=H,
             W_LR_scale=W_LR_scale,
-            num_filters=128, 
+            num_filters=64, 
             filter_size=(3, 3),
             pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
@@ -154,6 +143,43 @@ if __name__ == "__main__":
             stochastic=stochastic,
             H=H,
             W_LR_scale=W_LR_scale,
+            num_filters=64, 
+            filter_size=(3, 3),
+            pad = 'same',
+            nonlinearity=lasagne.nonlinearities.identity)
+    
+    cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
+    
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
+            
+    # 128C3-128C3-P2             
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            H=H,
+            W_LR_scale=W_LR_scale,
+            num_filters=128, 
+            filter_size=(3, 3),
+            pad = 'same',
+            nonlinearity=lasagne.nonlinearities.identity)
+    
+    cnn = batch_norm.BatchNormLayer(
+            cnn,
+            epsilon=epsilon, 
+            alpha=alpha,
+            nonlinearity=lasagne.nonlinearities.rectify)
+            
+    cnn = binary_connect.Conv2DLayer(
+            cnn, 
+            binary=binary,
+            stochastic=stochastic,
+            H=H,
+            W_LR_scale=W_LR_scale,
             num_filters=128, 
             filter_size=(3, 3),
             pad = 'same',
@@ -167,7 +193,7 @@ if __name__ == "__main__":
             alpha=alpha,
             nonlinearity=lasagne.nonlinearities.rectify)
             
-    # 256C3-256C3-P2             
+    # 256C3-256C3-P2              
     cnn = binary_connect.Conv2DLayer(
             cnn, 
             binary=binary,
@@ -175,43 +201,6 @@ if __name__ == "__main__":
             H=H,
             W_LR_scale=W_LR_scale,
             num_filters=256, 
-            filter_size=(3, 3),
-            pad = 'same',
-            nonlinearity=lasagne.nonlinearities.identity)
-    
-    cnn = batch_norm.BatchNormLayer(
-            cnn,
-            epsilon=epsilon, 
-            alpha=alpha,
-            nonlinearity=lasagne.nonlinearities.rectify)
-            
-    cnn = binary_connect.Conv2DLayer(
-            cnn, 
-            binary=binary,
-            stochastic=stochastic,
-            H=H,
-            W_LR_scale=W_LR_scale,
-            num_filters=256, 
-            filter_size=(3, 3),
-            pad = 'same',
-            nonlinearity=lasagne.nonlinearities.identity)
-    
-    cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
-    
-    cnn = batch_norm.BatchNormLayer(
-            cnn,
-            epsilon=epsilon, 
-            alpha=alpha,
-            nonlinearity=lasagne.nonlinearities.rectify)
-            
-    # 512C3-512C3-P2              
-    cnn = binary_connect.Conv2DLayer(
-            cnn, 
-            binary=binary,
-            stochastic=stochastic,
-            H=H,
-            W_LR_scale=W_LR_scale,
-            num_filters=512, 
             filter_size=(3, 3),
             pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
@@ -228,7 +217,7 @@ if __name__ == "__main__":
             stochastic=stochastic,
             H=H,
             W_LR_scale=W_LR_scale,
-            num_filters=512, 
+            num_filters=256, 
             filter_size=(3, 3),
             pad = 'same',
             nonlinearity=lasagne.nonlinearities.identity)
@@ -291,7 +280,7 @@ if __name__ == "__main__":
 
     train_output = lasagne.layers.get_output(cnn, deterministic=False)
     
-    # squared hinge loss
+    # squared hinge loss 
     loss = T.mean(T.sqr(T.maximum(0.,1.-target*train_output)))
     
     if binary:

@@ -46,39 +46,26 @@ from collections import OrderedDict
 if __name__ == "__main__":
     
     # BN parameters
-    batch_size = 200
+    batch_size = 100
     print("batch_size = "+str(batch_size))
     # alpha is the exponential moving average factor
-    # alpha = .1 # for a minibatch of size 50
-    # alpha = .2 # for a minibatch of size 100
-    alpha = .33 # for a minibatch of size 200
+    alpha = .15
     print("alpha = "+str(alpha))
     epsilon = 1e-4
     print("epsilon = "+str(epsilon))
     
     # MLP parameters
-    num_units = 1024
+    num_units = 2048
     print("num_units = "+str(num_units))
     n_hidden_layers = 3
     print("n_hidden_layers = "+str(n_hidden_layers))
     
     # Training parameters
-    num_epochs = 50
+    num_epochs = 250
     print("num_epochs = "+str(num_epochs))
     
-    # LR
-    LR_start = 1.
-    # LR_start = .001
-    print("LR_start = "+str(LR_start))
-    # LR_fin = LR_start/30.
-    LR_fin = LR_start/1000.
-    # LR_fin = LR_start/1.
-    print("LR_fin = "+str(LR_fin))
-    LR_decay = (LR_fin/LR_start)**(1./num_epochs) 
-    # BTW, LR decay is good for the moving average...
-    
     # Dropout parameters
-    dropout_in = 0.
+    dropout_in = 0. # 0. means no dropout
     print("dropout_in = "+str(dropout_in))
     dropout_hidden = 0.
     print("dropout_hidden = "+str(dropout_hidden))
@@ -88,17 +75,22 @@ if __name__ == "__main__":
     print("binary = "+str(binary))
     stochastic = True
     print("stochastic = "+str(stochastic))
-    # H = (1./(1<<4))/10
-    # H = 1./(1<<4)
-    # H = .316
+    # (-H,+H) are the two binary values
+    # H = "Glorot"
     H = 1.
     print("H = "+str(H))
-    # 80000 = 50* 1/(.025**2)
-    # 2000 = 50* 1/.025
-    W_LR_scale = 80000.
-    # W_LR_scale = 1000.
-    # W_LR_scale = 1.
+    # W_LR_scale = 1.    
+    W_LR_scale = "Glorot" # "Glorot" means we are using the coefficients from Glorot's paper
     print("W_LR_scale = "+str(W_LR_scale))
+    
+    # Decaying LR 
+    LR_start = .001
+    print("LR_start = "+str(LR_start))
+    LR_fin = 0.000003
+    print("LR_fin = "+str(LR_fin))
+    LR_decay = (LR_fin/LR_start)**(1./num_epochs)
+    print("LR_decay = "+str(LR_decay))
+    # BTW, LR decay might good for the BN moving average...
     
     print('Loading MNIST dataset...')
     
@@ -186,19 +178,16 @@ if __name__ == "__main__":
         # W updates
         W = lasagne.layers.get_all_params(mlp, binary=True)
         W_grads = binary_connect.compute_grads(loss,mlp)
-        updates = lasagne.updates.nesterov_momentum(loss_or_grads=W_grads, params=W, learning_rate=W_LR_scale*LR)
-        updates = binary_connect.clipping(updates,H)
-        # using 2H instead of H with stochastic yields about 20% relative worse results
+        updates = lasagne.updates.adam(loss_or_grads=W_grads, params=W, learning_rate=LR)
+        updates = binary_connect.clipping_scaling(updates,mlp)
         
         # other parameters updates
         params = lasagne.layers.get_all_params(mlp, trainable=True, binary=False)
-        updates = OrderedDict(updates.items() + lasagne.updates.nesterov_momentum(loss_or_grads=loss, params=params, learning_rate=LR).items())
-        # updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
+        updates = OrderedDict(updates.items() + lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR).items())
         
     else:
         params = lasagne.layers.get_all_params(mlp, trainable=True)
-        updates = lasagne.updates.nesterov_momentum(loss_or_grads=loss, params=params, learning_rate=LR)
-        # updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
+        updates = lasagne.updates.adam(loss_or_grads=loss, params=params, learning_rate=LR)
 
     test_output = lasagne.layers.get_output(mlp, deterministic=True)
     test_loss = T.mean(T.sqr(T.maximum(0.,1.-target*test_output)))
@@ -207,7 +196,6 @@ if __name__ == "__main__":
     # Compile a function performing a training step on a mini-batch (by giving the updates dictionary) 
     # and returning the corresponding training loss:
     train_fn = theano.function([input, target, LR], loss, updates=updates)
-    # train_fn = theano.function([input, target], loss, updates=updates)
 
     # Compile a second function computing the validation loss and accuracy:
     val_fn = theano.function([input, target], [test_loss, test_err])

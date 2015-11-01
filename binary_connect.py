@@ -31,68 +31,16 @@ import lasagne
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
-def compute_grads(loss,network):
-        
-    layers = lasagne.layers.get_all_layers(network)
-    grads = []
-    
-    for layer in layers:
-    
-        params = layer.get_params(binary=True)
-        if params:
-            # print(params[0].name)
-            grads.append(theano.grad(loss, wrt=layer.Wb))
-                
-    return grads
-
-def clipping_scaling(updates,network):
-    
-    layers = lasagne.layers.get_all_layers(network)
-    updates = OrderedDict(updates)
-    
-    for layer in layers:
-    
-        params = layer.get_params(binary=True)
-        for param in params:
-            print("W_LR_scale = "+str(layer.W_LR_scale))
-            print("H = "+str(layer.H))
-            updates[param] = param + layer.W_LR_scale*(updates[param] - param)
-            updates[param] = T.clip(updates[param], -layer.H,layer.H)     
-
-    return updates
-    
-# def clipping(updates,network):
-    
-    # layers = lasagne.layers.get_all_layers(network)
-    # updates = OrderedDict(updates)
-    
-    # for layer in layers:
-    
-        # params = layer.get_params(binary=True)
-        # for param in params:
-            # updates[param] = T.clip(updates[param], -layer.H, layer.H)     
-
-    # return updates
-    
-# def clipping(updates, H):
-    
-    # params = updates.keys()
-    # updates = OrderedDict(updates)
-
-    # for param in params:
-        # updates[param] = T.clip(updates[param], -H, H)
-
-    # return updates
-
 def hard_sigmoid(x):
     return T.clip((x+1.)/2.,0,1)
 
+# The binarization function
 def binarization(W,H,binary=True,deterministic=False,stochastic=False,srng=None):
     
-    # (deterministic == True) <-> test-time
+    # (deterministic == True) <-> test-time <-> inference-time
     if not binary or (deterministic and stochastic):
-        Wb = W
         # print("not binary")
+        Wb = W
     
     else:
         
@@ -114,12 +62,12 @@ def binarization(W,H,binary=True,deterministic=False,stochastic=False,srng=None)
         Wb = T.cast(T.switch(Wb,H,-H), theano.config.floatX)
     
     return Wb
-    
+
+# This class extends the Lasagne DenseLayer to support BinaryConnect
 class DenseLayer(lasagne.layers.DenseLayer):
     
     def __init__(self, incoming, num_units, 
         binary = True, stochastic = True, H=1.,W_LR_scale="Glorot", **kwargs):
-        # binary = True, stochastic = True, **kwargs):
         
         self.binary = binary
         self.stochastic = stochastic
@@ -157,11 +105,11 @@ class DenseLayer(lasagne.layers.DenseLayer):
         
         return rvalue
 
+# This class extends the Lasagne Conv2DLayer to support BinaryConnect
 class Conv2DLayer(lasagne.layers.Conv2DLayer):
     
     def __init__(self, incoming, num_filters, filter_size,
         binary = True, stochastic = True, H=1.,W_LR_scale="Glorot", **kwargs):
-        # binary = True, stochastic = True, **kwargs):
         
         self.binary = binary
         self.stochastic = stochastic
@@ -200,7 +148,41 @@ class Conv2DLayer(lasagne.layers.Conv2DLayer):
         self.W = Wr
         
         return rvalue
+
+# This function computes the gradient of the binary weights
+def compute_grads(loss,network):
         
+    layers = lasagne.layers.get_all_layers(network)
+    grads = []
+    
+    for layer in layers:
+    
+        params = layer.get_params(binary=True)
+        if params:
+            # print(params[0].name)
+            grads.append(theano.grad(loss, wrt=layer.Wb))
+                
+    return grads
+
+# This functions clips the weights after the parameter update
+def clipping_scaling(updates,network):
+    
+    layers = lasagne.layers.get_all_layers(network)
+    updates = OrderedDict(updates)
+    
+    for layer in layers:
+    
+        params = layer.get_params(binary=True)
+        for param in params:
+            print("W_LR_scale = "+str(layer.W_LR_scale))
+            print("H = "+str(layer.H))
+            updates[param] = param + layer.W_LR_scale*(updates[param] - param)
+            updates[param] = T.clip(updates[param], -layer.H,layer.H)     
+
+    return updates
+        
+# Given a dataset and a model, this function trains the model on the dataset for several epochs
+# (There is no default train function in Lasagne yet)
 def train(train_fn,val_fn,
             batch_size,
             LR_start,LR_decay,
@@ -208,7 +190,8 @@ def train(train_fn,val_fn,
             X_train,y_train,
             X_val,y_val,
             X_test,y_test):
-            
+    
+    # A function which shuffles a dataset
     def shuffle(X,y):
     
         shuffled_range = range(len(X))
@@ -224,7 +207,8 @@ def train(train_fn,val_fn,
             new_y[i] = y[shuffled_range[i]]
             
         return new_X,new_y
-        
+    
+    # This function trains the model a full epoch (on the whole dataset)
     def train_epoch(X,y,LR):
         
         loss = 0
@@ -236,7 +220,8 @@ def train(train_fn,val_fn,
         loss/=batches
         
         return loss
-        
+    
+    # This function tests the model a full epoch (on the whole dataset)
     def val_epoch(X,y):
         
         err = 0
@@ -290,4 +275,5 @@ def train(train_fn,val_fn,
         print("  test loss:                     "+str(test_loss))
         print("  test error rate:               "+str(test_err)+"%") 
         
+        # decay the LR
         LR *= LR_decay
