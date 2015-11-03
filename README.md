@@ -6,12 +6,14 @@
 * Theano 0.6 (Bleeding edge version)
 * Pylearn2 0.1
 * Lasagne 0.1
+* PyTables (only for the SVHN dataset)
 * a fast GPU or a large amount of patience
 
 ## Motivations
 
-This repository allows to easily reproduce the experimental results reported in the paper:
-"BinaryConnect: Training Deep Neural Networks with binary weights during propagations".
+This repository allows to easily reproduce the experimental results reported in the article:
+"BinaryConnect: Training Deep Neural Networks with binary weights during propagations",
+currently available at http://arxiv.org/abs/1511.00363
 
 ## MNIST
 
@@ -20,7 +22,7 @@ This repository allows to easily reproduce the experimental results reported in 
 This python script trains an MLP on MNIST with the stochastic version of BinaryConnect.
 It should run for about 30 minutes on a GTX 680 GPU.
 The final test error should be around 1.15%.
-Please note that this is NOT the experiment reported in the paper (which is in the "master" branch of the repository).
+Please note that this is NOT the experiment reported in the article (which is in the "master" branch of the repository).
 
 ## CIFAR-10
 
