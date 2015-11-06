@@ -2,15 +2,11 @@
 
 ## Motivations
 
-This repository allows to easily reproduce the experimental results reported in the article:
-"BinaryConnect: Training Deep Neural Networks with binary weights during propagations",
-currently available at http://arxiv.org/abs/1511.00363
-
-## Subsequent works
-
-"Neural Networks with Few Multiplications".
-The article and the code are respectively available at http://arxiv.org/abs/1510.03009
-and https://github.com/hantek/BinaryConnect
+This repository allows to easily reproduce the experimental results reported in the 
+[BinaryConnect article](http://arxiv.org/abs/1511.00363).
+The repository associated to the subsequent article,
+[Neural Networks with Few Multiplications](http://arxiv.org/abs/1510.03009),
+is available [here](https://github.com/hantek/BinaryConnect).
 
 ## Requirements
 
