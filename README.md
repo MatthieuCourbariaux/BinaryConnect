@@ -4,18 +4,19 @@
 
 This repository allows to easily reproduce the experimental results reported in the 
 [BinaryConnect article](http://arxiv.org/abs/1511.00363).
-The repository associated to the subsequent article,
+
+The code associated to the subsequent article,
 [Neural Networks with Few Multiplications](http://arxiv.org/abs/1510.03009),
 is available [here](https://github.com/hantek/BinaryConnect).
 
 ## Requirements
 
 * Python, Numpy, Scipy
-* Theano 0.6 (Bleeding edge version)
-* Pylearn2 0.1
-* Lasagne 0.1
-* PyTables (only for the SVHN dataset)
-* a fast GPU or a large amount of patience
+* [Theano](http://deeplearning.net/software/theano/install.html) (Bleeding edge version)
+* [Pylearn2](http://deeplearning.net/software/pylearn2/)
+* [Lasagne](http://lasagne.readthedocs.org/en/latest/user/installation.html)
+* [PyTables](http://www.pytables.org/usersguide/installation.html) (only for the SVHN dataset)
+* a fast Nvidia GPU or a large amount of patience
 
 ## MNIST
 
