@@ -4,7 +4,6 @@
 
 This repository allows to easily reproduce the experimental results reported in the 
 [BinaryConnect article](http://arxiv.org/abs/1511.00363).
-
 The code associated to the subsequent article,
 [Neural Networks with Few Multiplications](http://arxiv.org/abs/1510.03009),
 is available [here](https://github.com/hantek/BinaryConnect).
