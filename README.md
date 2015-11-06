@@ -1,5 +1,17 @@
 # BinaryConnect
 
+## Motivations
+
+This repository allows to easily reproduce the experimental results reported in the article:
+"BinaryConnect: Training Deep Neural Networks with binary weights during propagations",
+currently available at http://arxiv.org/abs/1511.00363
+
+## Subsequent works
+
+"Neural Networks with Few Multiplications".
+The article and the code are respectively available at http://arxiv.org/abs/1510.03009
+and https://github.com/hantek/BinaryConnect
+
 ## Requirements
 
 * Python, Numpy, Scipy
@@ -8,12 +20,6 @@
 * Lasagne 0.1
 * PyTables (only for the SVHN dataset)
 * a fast GPU or a large amount of patience
-
-## Motivations
-
-This repository allows to easily reproduce the experimental results reported in the article:
-"BinaryConnect: Training Deep Neural Networks with binary weights during propagations",
-currently available at http://arxiv.org/abs/1511.00363
 
 ## MNIST
 
@@ -50,3 +56,5 @@ The final test error should be around 2.15%.
 The python scripts mnist.py, cifar10.py and svhn.py contain all the relevant hyperparameters.
 It is very straightforward to modify them.
 binary_connect.py contains the binarization function (called binarization).
+
+Have fun!
