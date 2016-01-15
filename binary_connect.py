@@ -137,13 +137,13 @@ class Conv2DLayer(lasagne.layers.Conv2DLayer):
         else:
             super(Conv2DLayer, self).__init__(incoming, num_filters, filter_size, **kwargs)    
     
-    def get_output_for(self, input, input_shape=None, deterministic=False, **kwargs):
+    def convolve(self, input, deterministic=False, **kwargs):
         
         self.Wb = binarization(self.W,self.H,self.binary,deterministic,self.stochastic,self._srng)
         Wr = self.W
         self.W = self.Wb
             
-        rvalue = super(Conv2DLayer, self).get_output_for(input,input_shape, **kwargs)
+        rvalue = super(Conv2DLayer, self).convolve(input, **kwargs)
         
         self.W = Wr
         

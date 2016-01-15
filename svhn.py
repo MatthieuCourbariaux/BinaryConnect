@@ -128,7 +128,7 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=64, 
             filter_size=(3, 3),
-            pad = 'same',
+            pad=1,
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = batch_norm.BatchNormLayer(
@@ -145,7 +145,7 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=64, 
             filter_size=(3, 3),
-            pad = 'same',
+            pad=1,
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
@@ -165,7 +165,7 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=128, 
             filter_size=(3, 3),
-            pad = 'same',
+            pad=1,
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = batch_norm.BatchNormLayer(
@@ -182,7 +182,7 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=128, 
             filter_size=(3, 3),
-            pad = 'same',
+            pad=1,
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
@@ -202,7 +202,7 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=256, 
             filter_size=(3, 3),
-            pad = 'same',
+            pad=1,
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = batch_norm.BatchNormLayer(
@@ -219,7 +219,7 @@ if __name__ == "__main__":
             W_LR_scale=W_LR_scale,
             num_filters=256, 
             filter_size=(3, 3),
-            pad = 'same',
+            pad=1,
             nonlinearity=lasagne.nonlinearities.identity)
     
     cnn = lasagne.layers.MaxPool2DLayer(cnn, pool_size=(2, 2))
