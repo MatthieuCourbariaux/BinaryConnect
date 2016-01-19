@@ -55,7 +55,7 @@ if __name__ == "__main__":
     print("epsilon = "+str(epsilon))
     
     # MLP parameters
-    num_units = 2048
+    num_units = 1280
     print("num_units = "+str(num_units))
     n_hidden_layers = 3
     print("n_hidden_layers = "+str(n_hidden_layers))
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # BinaryConnect
     binary = True
     print("binary = "+str(binary))
-    stochastic = True
+    stochastic = False
     print("stochastic = "+str(stochastic))
     # (-H,+H) are the two binary values
     # H = "Glorot"
@@ -204,6 +204,7 @@ if __name__ == "__main__":
     
     binary_connect.train(
             train_fn,val_fn,
+            mlp,
             batch_size,
             LR_start,LR_decay,
             num_epochs,

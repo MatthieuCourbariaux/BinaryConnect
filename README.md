@@ -21,9 +21,9 @@ is available [here](https://github.com/hantek/BinaryConnect).
 
     python mnist.py
     
-This python script trains an MLP on MNIST with the stochastic version of BinaryConnect.
-It should run for about 30 minutes on a GTX 680 GPU.
-The final test error should be around **1.15%**.
+This python script trains an MLP on MNIST with the deterministic version of BinaryConnect.
+It should run for about 20 minutes on a GTX 680 GPU.
+The final test error should be around **1.12%**.
 Please note that this is NOT the experiment reported in the article (which is in the "master" branch of the repository).
 
 ## CIFAR-10

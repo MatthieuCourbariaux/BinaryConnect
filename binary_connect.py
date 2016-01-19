@@ -184,6 +184,7 @@ def clipping_scaling(updates,network):
 # Given a dataset and a model, this function trains the model on the dataset for several epochs
 # (There is no default train function in Lasagne yet)
 def train(train_fn,val_fn,
+            model,
             batch_size,
             LR_start,LR_decay,
             num_epochs,
@@ -261,6 +262,13 @@ def train(train_fn,val_fn,
             best_epoch = epoch+1
             
             test_err, test_loss = val_epoch(X_test,y_test)
+            
+            np.savez('best_model.npz', *lasagne.layers.get_all_param_values(model))
+            
+            # And load them again later on like this:
+            # with np.load('best_model.npz') as f:
+                # param_values = [f['arr_%d' % i] for i in range(len(f.files))]
+            # lasagne.layers.set_all_param_values(model, param_values)
         
         epoch_duration = time.time() - start_time
         
