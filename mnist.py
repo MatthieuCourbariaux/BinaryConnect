@@ -94,9 +94,9 @@ if __name__ == "__main__":
     
     print('Loading MNIST dataset...')
     
-    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = True)
-    valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = True)
-    test_set = MNIST(which_set= 'test', center = True)
+    train_set = MNIST(which_set= 'train', start=0, stop = 50000, center = False)
+    valid_set = MNIST(which_set= 'train', start=50000, stop = 60000, center = False)
+    test_set = MNIST(which_set= 'test', center = False)
     
     # bc01 format
     # print train_set.X.shape

@@ -1,3 +1,19 @@
+# Copyright 2015 Matthieu Courbariaux
+
+# This file is part of BinaryConnect.
+
+# BinaryConnect is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# BinaryConnect is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with BinaryConnect.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
 import os
@@ -17,7 +33,8 @@ if __name__ == "__main__":
     x = test_set[0]
     t = test_set[1]
     # mean centering the dataset
-    x = x - np.mean(x, axis=0)
+    # x = x - np.mean(x, axis=0)
+    # print(np.min(x))
     
     # Loading all parameters
     with np.load('parameters.npz') as f:
