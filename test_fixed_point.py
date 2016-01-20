@@ -17,12 +17,13 @@ NOIB = 6
 def fixed_point(x):
     
     power = 2.**(NOB - SIGN - NOIB)
-    max = (2.**(NOB - SIGN))-1
-    value = x*power  
-
+    max = ((2.**(NOB - SIGN))-1) / power  
+    
     # rounding or flooring
+    value = x*power  
     value = np.round(value)
     # value = np.floor(value)
+    value = value/power
     
     # Saturation arithmetic
     # You may want to try out clockwork arithmetic instead
@@ -30,8 +31,7 @@ def fixed_point(x):
         value = np.clip(value, -max, max) 
     else:
         value = np.clip(value, 0, max)
-        
-    value = value/power
+    
     return value 
 
 if __name__ == "__main__":
