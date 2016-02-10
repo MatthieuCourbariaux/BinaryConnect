@@ -1,12 +1,16 @@
+**Please checkout our latest work,  
+[BinaryNet: Training Deep Neural Networks with Weights and Activations Constrained to +1 or -1](http://arxiv.org/abs/1602.02830),  
+and the associated [github repository](https://github.com/MatthieuCourbariaux/BinaryNet).**
+
 # BinaryConnect
 
 ## Motivations
 
 The goal of this repository is to enable the reproduction of the experiments described in  
-[BinaryConnect: Training Deep Neural Networks with binary weights during propagations](http://arxiv.org/abs/1511.00363).
-The repository associated with the subsequent article,
-[Neural Networks with Few Multiplications](http://arxiv.org/abs/1510.03009),
-is available [here](https://github.com/hantek/BinaryConnect).
+[BinaryConnect: Training Deep Neural Networks with binary weights during propagations](http://arxiv.org/abs/1511.00363).  
+You may want to checkout our subsequent work:
+* [Neural Networks with Few Multiplications](http://arxiv.org/abs/1510.03009)
+* [BinaryNet: Training Deep Neural Networks with Weights and Activations Constrained to +1 or -1](http://arxiv.org/abs/1602.02830)
 
 ## Requirements
 
