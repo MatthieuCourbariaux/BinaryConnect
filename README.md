@@ -43,7 +43,7 @@ The final test error should be around **8.27%**.
     export SVHN_LOCAL_PATH=/Tmp/SVHN/
     python svhn_preprocessing.py
 
-This python script (taken from Pylearn2) computes a preprocessed (GCN and ZCA whitening) version of the SVHN dataset in a temporary folder (SVHN_LOCAL_PATH).
+This python script (taken from Pylearn2) computes a preprocessed (GCN and LCN) version of the SVHN dataset in a temporary folder (SVHN_LOCAL_PATH).
 
     python svhn.py
     
